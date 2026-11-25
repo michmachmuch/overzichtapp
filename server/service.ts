@@ -56,7 +56,12 @@ export function monthsBetween(from: string, to: string): string[] {
 function isEntry(e: unknown): e is RawTimeEntry {
   const x = e as RawTimeEntry
   return !!x && typeof x === 'object' && typeof x.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date)
-    && typeof x.workTime === 'string' && /^\d{1,2}:\d{2}$/.test(x.workTime) && typeof x.durationMinutes === 'number'
+    && typeof x.durationMinutes === 'number'
+}
+
+/** Whether an entry has a usable start time (workTime 'HH:MM'). */
+export function hasStart(x: RawTimeEntry): x is RawTimeEntry & { workTime: string } {
+  return typeof x.workTime === 'string' && /^\d{1,2}:\d{2}$/.test(x.workTime)
 }
 
 /** Split text that holds several JSON objects one after another (JSON Lines or just concatenated). */
@@ -292,8 +297,8 @@ export class Service {
       entries.push({
         id,
         date: raw.date,
-        start: raw.workTime.padStart(5, '0'),
-        end: addMinutes(raw.workTime, raw.durationMinutes),
+        start: hasStart(raw) ? raw.workTime.padStart(5, '0') : null,
+        end: hasStart(raw) ? addMinutes(raw.workTime, raw.durationMinutes) : null,
         durationMinutes: raw.durationMinutes,
         note: raw.note ?? '',
         issueIid: raw.issueIid ?? null,
@@ -308,7 +313,8 @@ export class Service {
         commit: c ? { sha: c.id, shortSha: c.short_id, url: c.web_url, title: c.title } : null,
       })
     }
-    return entries.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
+    // Entries without a start time come first on their day.
+    return entries.sort((a, b) => (a.date + (a.start ?? '')).localeCompare(b.date + (b.start ?? '')))
   }
 
   /** Explains what the app finds, to help when no hours show up. */

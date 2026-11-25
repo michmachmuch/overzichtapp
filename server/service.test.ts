@@ -55,6 +55,11 @@ describe('helpers', () => {
     expect(e?.workTime).toBe('16:00')
     expect(e?.durationMinutes).toBe(30)
     expect(parseTimeEntry('{"foo":1}')).toBeNull()
+    // entries without a start time are kept (absent, empty or null workTime)
+    const { workTime: _drop, ...noTime } = JSON.parse(SAMPLE)
+    expect(parseTimeEntry(JSON.stringify(noTime))?.durationMinutes).toBe(30)
+    expect(parseTimeEntry(JSON.stringify({ ...noTime, workTime: '' }))).not.toBeNull()
+    expect(parseTimeEntry(JSON.stringify({ ...noTime, workTime: null }))).not.toBeNull()
     expect(parseTimeEntry('not json')).toBeNull()
   })
   it('reads files with several entries (array, wrapped array, JSON Lines, concatenated)', () => {
@@ -78,8 +83,10 @@ describe('Service', () => {
     for (const e of entries) {
       expect(e.date >= from && e.date <= to).toBe(true)
       expect(e.commit?.url).toMatch(/\/-\/commit\//)
-      expect(e.end > e.start).toBe(true)
+      if (e.start) expect(e.end! > e.start).toBe(true)
+      else expect(e.end).toBeNull()
     }
+    expect(entries.some((e) => e.start === null)).toBe(true)
   })
 
   it('reads a real-format entry from .time-tracking/YYYY/MM', async () => {
