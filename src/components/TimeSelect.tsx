@@ -1,6 +1,6 @@
 /** 24-hour time picker (HH:MM). The browser's own time field follows the system locale and can show AM/PM. */
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
-const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))
+const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
 
 export function TimeSelect({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
   const [h, m] = value ? value.split(':') : ['', '']
