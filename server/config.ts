@@ -20,7 +20,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     gitlabToken: env.GITLAB_TOKEN ?? '',
     gitlabProject: env.GITLAB_PROJECT ?? '',
     branch: env.TIMETRACKING_BRANCH ?? 'develop',
-    timetrackingDir: (env.TIMETRACKING_DIR ?? '.timetracking').replace(/^\/+|\/+$/g, ''),
+    timetrackingDir: (env.TIMETRACKING_DIR ?? '.time-tracking').replace(/^\/+|\/+$/g, ''),
     timetrackingUserId: env.TIMETRACKING_USER_ID ? Number(env.TIMETRACKING_USER_ID) : null,
     demo: env.DEMO === '1' || env.DEMO === 'true',
   }

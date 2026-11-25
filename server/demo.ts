@@ -30,7 +30,7 @@ function demoEntries() {
       const date = iso(day)
       const id = `demo-${date}-${i}`
       out.push({
-        path: `.timetracking/${date.slice(0, 4)}/${date.slice(5, 7)}/${id}.json`,
+        path: `.time-tracking/${date.slice(0, 4)}/${date.slice(5, 7)}/${id}.json`,
         sha: `blob${date.replace(/-/g, '')}${i}`,
         content: {
           schemaVersion: 1, id, createdAt: `${date}T${time}:00.000Z`, userId: USER.id, projectId: PROJECT.id,

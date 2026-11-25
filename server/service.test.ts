@@ -82,14 +82,14 @@ describe('Service', () => {
     }
   })
 
-  it('reads a real-format entry from .timetracking/YYYY/MM', async () => {
+  it('reads a real-format entry from .time-tracking/YYYY/MM', async () => {
     const paths: string[] = []
     const fake: FetchLike = async (url) => {
       const u = new URL(url)
       paths.push(u.pathname + '?' + u.searchParams.toString())
       const ok = (body: unknown) => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) })
       if (u.pathname.endsWith('/user')) return ok({ id: 3761, username: 'm', name: 'M' })
-      if (u.pathname.endsWith('/repository/tree')) return ok([{ id: 'abc', name: 'x.json', type: 'blob', path: '.timetracking/2026/11/x.json' }])
+      if (u.pathname.endsWith('/repository/tree')) return ok([{ id: 'abc', name: 'x.json', type: 'blob', path: '.time-tracking/2026/11/x.json' }])
       if (u.pathname.endsWith('/raw')) return ok(SAMPLE)
       if (u.pathname.endsWith('/repository/commits')) return ok([{ id: 'f'.repeat(40), short_id: 'ffffffff', title: 't', web_url: 'https://g/p/-/commit/fff', created_at: '' }])
       return ok({ id: 7023, name: 'P', web_url: 'https://g/p', path_with_namespace: 'p' })
@@ -98,7 +98,7 @@ describe('Service', () => {
     const [e] = await service.timeEntries('2026-11-23', '2026-11-29')
     expect(e).toMatchObject({ date: '2026-11-24', start: '16:00', end: '16:30', issueIid: 71, issueUrl: 'https://g/p/-/issues/71' })
     expect(e.commit?.url).toBe('https://g/p/-/commit/fff')
-    expect(paths.some((p) => p.includes('path=.timetracking%2F2026%2F11') && p.includes('ref=develop'))).toBe(true)
+    expect(paths.some((p) => p.includes('path=.time-tracking%2F2026%2F11') && p.includes('ref=develop'))).toBe(true)
   })
 
   it('recognises your entries by commit author when the userId differs from your GitLab id', async () => {
@@ -106,7 +106,7 @@ describe('Service', () => {
       const u = new URL(url)
       const ok = (body: unknown) => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) })
       if (u.pathname.endsWith('/user')) return ok({ id: 99, username: 'mischa', name: 'Mischa', email: 'm@school.nl' })
-      if (u.pathname.endsWith('/repository/tree')) return ok([{ id: 'abc', name: 'x.jsonl', type: 'blob', path: '.timetracking/2026/11/x.jsonl' }])
+      if (u.pathname.endsWith('/repository/tree')) return ok([{ id: 'abc', name: 'x.jsonl', type: 'blob', path: '.time-tracking/2026/11/x.jsonl' }])
       if (u.pathname.endsWith('/raw')) return ok(SAMPLE + '\n' + SAMPLE.replace('44b4db50', 'second').replace('16:00', '09:00'))
       if (u.pathname.endsWith('/repository/commits')) return ok([{ id: 'f'.repeat(40), short_id: 'ffffffff', title: 't', web_url: 'https://g/p/-/commit/fff', created_at: '', author_name: 'Mischa', author_email: 'M@school.nl' }])
       return ok({ id: 7023, name: 'P', web_url: 'https://g/p', path_with_namespace: 'p' })
@@ -121,7 +121,7 @@ describe('Service', () => {
     const { service } = setup()
     const d = await service.diagnoseTime('2026-11-01', '2026-11-30')
     expect(d.branches).toEqual(['develop'])
-    expect(d.folders[0].path).toBe('.timetracking/2026/11')
+    expect(d.folders[0].path).toBe('.time-tracking/2026/11')
     expect(d.entriesInRange).toBe(d.mine)
   })
 

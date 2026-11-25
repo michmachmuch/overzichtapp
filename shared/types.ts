@@ -1,6 +1,6 @@
 /** Types shared between the server and the web app. */
 
-/** One entry as written by the tijdregistratie program (one JSON file in .timetracking/YYYY/MM). */
+/** One entry as written by the tijdregistratie program (one JSON file in .time-tracking/YYYY/MM). */
 export interface RawTimeEntry {
   schemaVersion: number
   id: string

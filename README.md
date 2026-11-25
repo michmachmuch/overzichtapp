@@ -12,7 +12,7 @@ something and wonder "what now?". The screens are in Dutch.
 
 ## GitLab is read-only
 
-The app reads from the school GitLab (time entries in `.timetracking/YYYY/MM/*.json`
+The app reads from the school GitLab (time entries in `.time-tracking/YYYY/MM/*.json`
 on `develop`, issues, merge requests) and **never writes to it**. The GitLab client
 can only send `GET` requests, and a test checks that. Use a token with only the
 `read_api` scope.

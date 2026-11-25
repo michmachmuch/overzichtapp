@@ -184,13 +184,13 @@ export class Service {
     return this.config.branch.split(',').map((b) => b.trim()).filter(Boolean)
   }
 
-  /** All files under .timetracking/YYYY/MM for the months in the range, per branch. */
+  /** All files under .time-tracking/YYYY/MM for the months in the range, per branch. */
   private async listFiles(projectId: number, from: string, to: string) {
     const files: (GLTreeItem & { branch: string })[] = []
     const folders: TimeDiagnosis['folders'] = []
     for (const branch of this.branches) {
       for (const month of monthsBetween(from, to)) {
-        const path = `${this.config.timetrackingDir}/${month}`
+        const path = `${this.config.time-trackingDir}/${month}`
         try {
           const items = await this.gl.getAll<GLTreeItem>(`/projects/${projectId}/repository/tree`, { path, ref: branch, recursive: true })
           const blobs = items.filter((i) => i.type === 'blob' && !/\.(md|gitkeep|txt)$/i.test(i.name) && i.name !== '.gitkeep')
@@ -207,7 +207,7 @@ export class Service {
   }
 
   private isMine(user: GLUser, raw: RawTimeEntry, commit: GLCommit | null, learned: Set<number>): boolean {
-    if (this.config.timetrackingUserId !== null) return raw.userId === this.config.timetrackingUserId
+    if (this.config.time-trackingUserId !== null) return raw.userId === this.config.time-trackingUserId
     if (raw.userId === user.id || learned.has(raw.userId)) return true
     return authoredBy(user, commit)
   }
@@ -281,7 +281,7 @@ export class Service {
     for (const month of monthsBetween(from, to)) {
       try {
         const commits = await this.gl.get<GLCommit[]>(`/projects/${project.id}/repository/commits`, {
-          all: true, path: `${this.config.timetrackingDir}/${month}`, per_page: 5,
+          all: true, path: `${this.config.time-trackingDir}/${month}`, per_page: 5,
         })
         recentCommits = recentCommits.concat(commits.map((c) => ({ title: c.title, url: c.web_url, author: c.author_name ?? '', date: c.created_at })))
         for (const c of commits.slice(0, 3)) {
@@ -297,7 +297,7 @@ export class Service {
       mine: entries.filter((e) => e.mine).length,
       userIds,
       gitlabUserId: user.id,
-      configuredUserId: this.config.timetrackingUserId,
+      configuredUserId: this.config.time-trackingUserId,
       otherBranches: [...otherBranches],
       recentCommits: recentCommits.slice(0, 5),
     }
