@@ -117,12 +117,28 @@ describe('Service', () => {
     expect(entries.every((e) => e.mine)).toBe(true)
   })
 
+  it('lists team members (you first) and links entries to them', async () => {
+    const { service } = setup()
+    const members = await service.members()
+    expect(members[0]).toMatchObject({ id: 3761, isMe: true })
+    expect(members.map((m) => m.name)).toContain('Sam de Vries')
+    const today = new Date()
+    const from = new Date(today.getTime() - 14 * 86400000).toISOString().slice(0, 10)
+    const entries = await service.timeEntries(from, today.toISOString().slice(0, 10))
+    const sam = entries.filter((e) => e.personId === 4102)
+    expect(sam.length).toBeGreaterThan(0)
+    expect(sam.every((e) => !e.mine && e.personName === 'Sam de Vries')).toBe(true)
+    expect(entries.filter((e) => e.mine).every((e) => e.personId === 3761)).toBe(true)
+  })
+
   it('explains what it finds', async () => {
     const { service } = setup()
     const d = await service.diagnoseTime('2026-11-01', '2026-11-30')
     expect(d.branches).toEqual(['develop'])
     expect(d.folders[0].path).toBe('.time-tracking/2026/11')
-    expect(d.entriesInRange).toBe(d.mine)
+    expect(d.mine).toBeGreaterThan(0)
+    expect(d.entriesInRange).toBeGreaterThan(d.mine)
+    expect(Object.keys(d.userIds)).toHaveLength(3)
   })
 
   it('counts new issues and merge requests for check-ins', async () => {

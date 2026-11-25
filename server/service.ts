@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import type { Config } from './config.ts'
 import { enc, GitLabClient, GitLabError } from './gitlab.ts'
-import type { Checkin, CheckinStatus, GitLabIssue, GitLabMergeRequest, RawTimeEntry, Status, TimeDiagnosis, TimeEntry } from '../shared/types.ts'
+import type { Checkin, CheckinStatus, GitLabIssue, GitLabMergeRequest, RawTimeEntry, Status, TeamMember, TimeDiagnosis, TimeEntry } from '../shared/types.ts'
 
 interface GLProject { id: number; name: string; web_url: string; path_with_namespace: string }
 interface GLUser { id: number; username: string; name: string; email?: string; public_email?: string; commit_email?: string }
+interface GLMember { id: number; username: string; name: string; state?: string; bot?: boolean }
 interface GLTreeItem { id: string; name: string; type: 'blob' | 'tree'; path: string }
 interface GLCommit { id: string; short_id: string; title: string; web_url: string; created_at: string; author_name?: string; author_email?: string }
 interface GLIssue {
@@ -115,6 +116,7 @@ export class Service {
   /** Blob contents never change for a given blob sha, so they are cached forever. */
   private readonly blobCache = new Map<string, RawTimeEntry[]>()
   private readonly commitCache = new Map<string, GLCommit | null>()
+  private membersCache: { at: number; list: GLMember[] } | null = null
 
   private readonly cacheFile: string | null
   private cacheDirty = false
@@ -212,8 +214,32 @@ export class Service {
     return authoredBy(user, commit)
   }
 
+  private async projectMembers(projectId: number): Promise<GLMember[]> {
+    if (this.membersCache && Date.now() - this.membersCache.at < 3600_000) return this.membersCache.list
+    let list: GLMember[] = []
+    try {
+      list = (await this.gl.getAll<GLMember>(`/projects/${projectId}/members/all`, {}, 5))
+        .filter((m) => !m.bot && (m.state ?? 'active') === 'active' && !/(^|_)bot(_|\d|$)/i.test(m.username))
+    } catch {
+      /* without member access we still show you and the ids found in the entries */
+    }
+    this.membersCache = { at: Date.now(), list }
+    return list
+  }
+
+  /** Team members of the project (from GitLab, read-only), you first. */
+  async members(): Promise<TeamMember[]> {
+    const { project, user } = await this.ensure()
+    const list = await this.projectMembers(project.id)
+    const all = list.some((m) => m.id === user.id) ? list : [{ id: user.id, username: user.username, name: user.name }, ...list]
+    return all
+      .map((m) => ({ id: m.id, username: m.username, name: m.name, isMe: m.id === user.id }))
+      .sort((a, b) => Number(b.isMe) - Number(a.isMe) || a.name.localeCompare(b.name))
+  }
+
   async timeEntries(from: string, to: string): Promise<TimeEntry[]> {
     const { project, user } = await this.ensure()
+    const members = await this.projectMembers(project.id)
     const { files } = await this.listFiles(project.id, from, to)
 
     const perFile = await pool(files, 6, async (file) => {
@@ -242,12 +268,27 @@ export class Service {
     // If your commits carry a tijdregistratie userId that differs from your GitLab id, learn it.
     const flat = perFile.flat()
     const learned = new Set(flat.filter((x) => authoredBy(user, x.c)).map((x) => x.raw.userId))
+    // Work out whose entry it is: by tijdregistratie userId = GitLab id, otherwise by commit author.
+    const people = members.some((m) => m.id === user.id) ? members : [user, ...members]
+    const byAuthor = (c: GLCommit | null) => (c ? people.find((m) => authoredBy(m, c)) ?? null : null)
+    const learnedPerson = new Map<number, number>()
+    for (const x of flat) {
+      if (people.some((m) => m.id === x.raw.userId)) continue
+      const p = byAuthor(x.c)
+      if (p && !learnedPerson.has(x.raw.userId)) learnedPerson.set(x.raw.userId, p.id)
+    }
     const seen = new Set<string>()
     const entries: TimeEntry[] = []
     for (const { raw, file, c, i } of flat) {
       const id = raw.id ?? `${file.id}-${i}`
       if (seen.has(id)) continue
       seen.add(id)
+      const mine = this.isMine(user, raw, c, learned)
+      const personId = mine
+        ? user.id
+        : people.some((m) => m.id === raw.userId)
+          ? raw.userId
+          : learnedPerson.get(raw.userId) ?? byAuthor(c)?.id ?? null
       entries.push({
         id,
         date: raw.date,
@@ -260,7 +301,9 @@ export class Service {
         processStepId: raw.processStepId ?? null,
         skillId: raw.skillId ?? null,
         userId: raw.userId,
-        mine: this.isMine(user, raw, c, learned),
+        mine,
+        personId,
+        personName: people.find((m) => m.id === personId)?.name ?? null,
         file: file.path,
         commit: c ? { sha: c.id, shortSha: c.short_id, url: c.web_url, title: c.title } : null,
       })
@@ -361,9 +404,10 @@ function toIssue(i: GLIssue): GitLabIssue {
   }
 }
 
-function authoredBy(user: GLUser, c: GLCommit | null): boolean {
+function authoredBy(user: GLUser | GLMember, c: GLCommit | null): boolean {
   if (!c) return false
-  const emails = [user.email, user.public_email, user.commit_email].filter(Boolean).map((e) => e!.toLowerCase())
+  const u = user as GLUser
+  const emails = [u.email, u.public_email, u.commit_email].filter(Boolean).map((e) => e!.toLowerCase())
   if (c.author_email && emails.includes(c.author_email.toLowerCase())) return true
   return !!c.author_name && (c.author_name === user.name || c.author_name === user.username)
 }
