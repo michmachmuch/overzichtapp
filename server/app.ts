@@ -52,6 +52,7 @@ export function createApp(service: Service, store: Store, staticDir: string | nu
           return send(res, 200, await service.diagnoseTime(from, to))
         }
 
+        if (req.method === 'GET' && path === '/api/members') return send(res, 200, await service.members())
         if (req.method === 'GET' && path === '/api/issues') return send(res, 200, await service.myIssues())
         if (req.method === 'GET' && path === '/api/merge-requests') return send(res, 200, await service.mergeRequests())
 

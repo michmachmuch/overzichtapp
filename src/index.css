@@ -11,6 +11,13 @@
   --accent-soft: #eceafd;
   --danger: #c93636;
   --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
   --ideal: #a3a29c;
   --todo: #8a8984;
   --doing: #d48a00;
@@ -41,6 +48,13 @@
     --accent-soft: #2a2850;
     --danger: #e66767;
     --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #0ca30c;
+    --series-7: #9085e9;
+    --series-8: #e66767;
     --ideal: #6d6c66;
     --todo: #9a998f;
     --doing: #e0a32a;
@@ -189,10 +203,10 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .cal-day.is-today { background-color: color-mix(in srgb, var(--accent-soft) 35%, transparent); }
 .cal-entry {
   position: absolute; display: flex; flex-direction: column; gap: 0.1rem; overflow: hidden; text-align: left;
-  border: none; border-left: 3px solid var(--series-1); border-radius: 6px; padding: 0.2rem 0.4rem; cursor: pointer;
-  background: color-mix(in srgb, var(--series-1) 16%, var(--surface)); color: var(--text); font-size: 0.75rem; line-height: 1.25;
+  border: none; border-left: 3px solid var(--entry-color, var(--series-1)); border-radius: 6px; padding: 0.2rem 0.4rem; cursor: pointer;
+  background: color-mix(in srgb, var(--entry-color, var(--series-1)) 16%, var(--surface)); color: var(--text); font-size: 0.75rem; line-height: 1.25;
 }
-.cal-entry:hover, .cal-entry:focus-visible { background: color-mix(in srgb, var(--series-1) 28%, var(--surface)); outline: none; }
+.cal-entry:hover, .cal-entry:focus-visible { background: color-mix(in srgb, var(--entry-color, var(--series-1)) 28%, var(--surface)); outline: none; }
 .cal-entry-time { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-entry-inline { font-weight: 400; color: var(--text-2); }
 .cal-entry-note { color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
@@ -238,3 +252,9 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .status-achter .sprint-hours-status strong { color: var(--doing); }
 .target-hours { display: inline-flex; align-items: center; gap: 0.6rem; margin-top: 0.75rem; font-size: 0.88rem; color: var(--text-2); }
 .target-hours input { width: 6rem; }
+.person-picker { display: inline-flex; align-items: center; gap: 0.5rem; }
+.person-picker select { width: auto; min-width: 14rem; }
+.cal-entry-who { font-weight: 700; }
+.legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem; color: var(--text-2); }
+.legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }

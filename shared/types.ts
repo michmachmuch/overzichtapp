@@ -35,6 +35,9 @@ export interface TimeEntry {
   userId: number
   /** Whether this entry is yours (by tijdregistratie userId or by commit author). */
   mine: boolean
+  /** GitLab user id of the team member this entry belongs to, if known. */
+  personId: number | null
+  personName: string | null
   file: string
   commit: { sha: string; shortSha: string; url: string; title: string } | null
 }
@@ -140,4 +143,11 @@ export interface TimeDiagnosis {
   /** Branches (other than the configured ones) with recent time-tracking commits. */
   otherBranches: string[]
   recentCommits: { title: string; url: string; author: string; date: string }[]
+}
+
+export interface TeamMember {
+  id: number
+  username: string
+  name: string
+  isMe: boolean
 }

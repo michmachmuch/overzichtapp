@@ -6,6 +6,11 @@ import type { FetchLike } from './gitlab.ts'
 
 const PROJECT = { id: 7023, name: 'Volleypool project', web_url: 'https://gitlab.example/demo/volleypool', path_with_namespace: 'demo/volleypool' }
 const USER = { id: 3761, username: 'mischa', name: 'Mischa' }
+const TEAM = [
+  { id: 3761, username: 'mischa', name: 'Mischa', state: 'active' },
+  { id: 4102, username: 'sam', name: 'Sam de Vries', state: 'active' },
+  { id: 4117, username: 'noor', name: 'Noor Bakker', state: 'active' },
+]
 
 function iso(d: Date) { return d.toISOString().slice(0, 10) }
 
@@ -20,20 +25,21 @@ function demoEntries() {
     ['14:00', 120, 'Unit tests schrijven voor teamindeling', 64],
     ['16:00', 30, 'Brainstormen en verfijnen voorstellen nieuwe functies en epic', 71],
   ] as const
-  const out: { path: string; sha: string; content: object }[] = []
-  for (let d = -7; d < 5; d++) {
+  const out: { path: string; sha: string; author: string; content: object }[] = []
+  for (const [pi, person] of TEAM.entries()) for (let d = -7; d < 5; d++) {
     const day = new Date(monday)
     day.setDate(monday.getDate() + d)
     if (day > today || day.getDay() === 0 || day.getDay() === 6) continue
-    const pick = notes.filter((_, i) => (i + d + 10) % 3 !== 0)
+    const pick = notes.filter((_, i) => (i + d + pi + 10) % 3 !== 0)
     pick.forEach(([time, mins, note, issue], i) => {
       const date = iso(day)
-      const id = `demo-${date}-${i}`
+      const id = `demo-${person.username}-${date}-${i}`
       out.push({
         path: `.time-tracking/${date.slice(0, 4)}/${date.slice(5, 7)}/${id}.json`,
-        sha: `blob${date.replace(/-/g, '')}${i}`,
+        sha: `blob${pi}${date.replace(/-/g, '')}${i}`,
+        author: person.name,
         content: {
-          schemaVersion: 1, id, createdAt: `${date}T${time}:00.000Z`, userId: USER.id, projectId: PROJECT.id,
+          schemaVersion: 1, id, createdAt: `${date}T${time}:00.000Z`, userId: person.id, projectId: PROJECT.id,
           issueIid: issue, branch: 'develop', processId: 'scrum-proces', processStepId: 'scrum-proces-plannen-sprint',
           skillId: 'scrum-proces-vaardigheid-kiezen-user-stories', date, durationMinutes: mins, workTime: time, note,
         },
@@ -75,6 +81,7 @@ export function demoFetch(): FetchLike {
     const p = u.pathname.replace(/^\/api\/v4/, '')
     const q = u.searchParams
     if (p === '/user') return respond(USER)
+    if (p.endsWith('/members/all')) return respond([...TEAM, { id: 5001, username: 'docent', name: 'Docent (logt geen uren)', state: 'active' }])
     if (/^\/projects\/[^/]+$/.test(p)) return respond(PROJECT)
     if (p.endsWith('/repository/tree')) {
       const dir = q.get('path') ?? ''
@@ -90,7 +97,7 @@ export function demoFetch(): FetchLike {
     if (p.endsWith('/repository/commits')) {
       const e = entries.find((x) => x.path === q.get('path'))
       const sha = (e?.sha ?? 'x').replace('blob', '').padEnd(40, 'a')
-      return respond([{ id: sha, short_id: sha.slice(0, 8), title: 'Tijdregistratie', author_name: 'Mischa', author_email: 'mischa@example.com', web_url: `${PROJECT.web_url}/-/commit/${sha}`, created_at: hoursAgo(1) }])
+      return respond([{ id: sha, short_id: sha.slice(0, 8), title: 'Tijdregistratie', author_name: e?.author ?? 'Mischa', web_url: `${PROJECT.web_url}/-/commit/${sha}`, created_at: hoursAgo(1) }])
     }
     if (/\/repository\/commits\/[^/]+\/refs$/.test(p)) return respond([{ type: 'branch', name: 'develop' }])
     if (p.endsWith('/issues')) {
