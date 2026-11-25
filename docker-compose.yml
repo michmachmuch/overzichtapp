@@ -1,0 +1,13 @@
+services:
+  overzicht:
+    build: .
+    container_name: overzicht
+    ports:
+      - "127.0.0.1:8080:8080"   # only reachable from your own laptop
+    env_file: .env
+    volumes:
+      - overzicht-data:/data    # your check-ins, deadlines and to-do's
+    restart: unless-stopped
+
+volumes:
+  overzicht-data:
