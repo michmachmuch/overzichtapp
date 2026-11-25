@@ -90,8 +90,9 @@ export function demoFetch(): FetchLike {
     if (p.endsWith('/repository/commits')) {
       const e = entries.find((x) => x.path === q.get('path'))
       const sha = (e?.sha ?? 'x').replace('blob', '').padEnd(40, 'a')
-      return respond([{ id: sha, short_id: sha.slice(0, 8), title: 'Tijdregistratie', web_url: `${PROJECT.web_url}/-/commit/${sha}`, created_at: hoursAgo(1) }])
+      return respond([{ id: sha, short_id: sha.slice(0, 8), title: 'Tijdregistratie', author_name: 'Mischa', author_email: 'mischa@example.com', web_url: `${PROJECT.web_url}/-/commit/${sha}`, created_at: hoursAgo(1) }])
     }
+    if (/\/repository\/commits\/[^/]+\/refs$/.test(p)) return respond([{ type: 'branch', name: 'develop' }])
     if (p.endsWith('/issues')) {
       let list = ISSUES
       if (q.get('assignee_id')) list = list.filter((i) => i.assignee)

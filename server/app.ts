@@ -40,7 +40,16 @@ export function createApp(service: Service, store: Store, staticDir: string | nu
           const from = url.searchParams.get('from') ?? ''
           const to = url.searchParams.get('to') ?? ''
           if (!DATE.test(from) || !DATE.test(to) || from > to) return send(res, 400, { error: 'from/to moeten YYYY-MM-DD zijn' })
-          return send(res, 200, await service.timeEntries(from, to))
+          const entries = await service.timeEntries(from, to)
+          console.log(`[tijd] ${from} t/m ${to}: ${entries.length} registraties, ${entries.filter((e) => e.mine).length} van jou`)
+          return send(res, 200, entries)
+        }
+
+        if (req.method === 'GET' && path === '/api/time/diagnose') {
+          const from = url.searchParams.get('from') ?? ''
+          const to = url.searchParams.get('to') ?? ''
+          if (!DATE.test(from) || !DATE.test(to) || from > to) return send(res, 400, { error: 'from/to moeten YYYY-MM-DD zijn' })
+          return send(res, 200, await service.diagnoseTime(from, to))
         }
 
         if (req.method === 'GET' && path === '/api/issues') return send(res, 200, await service.myIssues())
@@ -89,6 +98,7 @@ export function createApp(service: Service, store: Store, staticDir: string | nu
       res.end(req.method === 'HEAD' ? undefined : body)
     } catch (e) {
       const status = e instanceof GitLabError ? 502 : 500
+      console.error(`[fout] ${req.method} ${path}: ${(e as Error).message}`)
       send(res, status, { error: (e as Error).message })
     }
   })

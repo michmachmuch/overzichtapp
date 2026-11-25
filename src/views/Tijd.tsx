@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api, useLoad } from '../api'
 import { addDays, DAYS_SHORT, duration, isoWeek, MONTHS, parseYmd, startOfWeek, toMinutes, ymd } from '../format'
-import type { Status, TimeEntry } from '../../shared/types'
+import type { Status, TimeDiagnosis, TimeEntry } from '../../shared/types'
 
 const HOUR_PX = 48
 
@@ -33,6 +33,61 @@ function Detail({ e, onClose }: { e: TimeEntry; onClose: () => void }) {
   )
 }
 
+function Diagnose({ from, to, hiddenByFilter }: { from: string; to: string; hiddenByFilter: number }) {
+  const [diag, setDiag] = useState<TimeDiagnosis | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const run = () => {
+    setBusy(true)
+    api.diagnoseTime(from, to).then(setDiag, (e: Error) => setErr(e.message)).finally(() => setBusy(false))
+  }
+  return (
+    <section className="panel diagnose">
+      <h2>Geen uren te zien?</h2>
+      {hiddenByFilter > 0 && (
+        <p className="warn small">Er zijn {hiddenByFilter} registraties die niet als "van jou" herkend worden. Zet "Alleen mijn uren" uit om ze te zien.</p>
+      )}
+      {!diag && <button className="btn" onClick={run} disabled={busy}>{busy ? 'Bezig…' : 'Zoek uit waarom'}</button>}
+      {err && <p className="error small">{err}</p>}
+      {diag && (
+        <div className="small">
+          <p><strong>Gezocht op branch:</strong> {diag.branches.join(', ')}</p>
+          <ul>
+            {diag.folders.map((f) => (
+              <li key={f.branch + f.path}><code>{f.path}</code> op <code>{f.branch}</code>: {f.error ?? `${f.files} bestand(en)`}</li>
+            ))}
+          </ul>
+          <p><strong>Registraties in deze week:</strong> {diag.entriesInRange}, waarvan {diag.mine} van jou.</p>
+          {Object.keys(diag.userIds).length > 0 && (
+            <p>
+              <strong>userId's in de registraties:</strong> {Object.entries(diag.userIds).map(([id, n]) => `${id} (${n}×)`).join(', ')}.
+              {' '}Jouw GitLab-id is {diag.gitlabUserId}.
+              {diag.mine === 0 && <> Zet <code>TIMETRACKING_USER_ID=&lt;jouw id&gt;</code> in <code>.env</code> en herstart.</>}
+            </p>
+          )}
+          {diag.otherBranches.length > 0 && (
+            <p className="warn">
+              Tijdregistratie-commits gevonden op andere branch(es): <strong>{diag.otherBranches.join(', ')}</strong>.
+              {' '}Zet bijv. <code>TIMETRACKING_BRANCH={[...diag.branches, ...diag.otherBranches].join(',')}</code> in <code>.env</code> en herstart.
+            </p>
+          )}
+          {diag.recentCommits.length > 0 && (
+            <>
+              <p><strong>Laatste commits in de tijdregistratie-map (alle branches):</strong></p>
+              <ul>
+                {diag.recentCommits.map((c) => (
+                  <li key={c.url}><a href={c.url} target="_blank" rel="noreferrer">{c.title}</a> <span className="muted">{c.author}, {c.date.slice(0, 16).replace('T', ' ')}</span></li>
+                ))}
+              </ul>
+            </>
+          )}
+          {diag.recentCommits.length === 0 && diag.entriesInRange === 0 && <p>Er zijn deze week geen tijdregistratie-commits gevonden in GitLab, op geen enkele branch.</p>}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function Tijd({ status }: { status: Status | null }) {
   const [week, setWeekState] = useState(readWeek)
   const [onlyMine, setOnlyMine] = useState(true)
@@ -49,7 +104,7 @@ export function Tijd({ status }: { status: Status | null }) {
     window.history.replaceState(null, '', `#/tijd?week=${ymd(w)}`)
   }
 
-  const entries = (data ?? []).filter((e) => !onlyMine || !status?.user || e.userId === status.user.id)
+  const entries = (data ?? []).filter((e) => !onlyMine || e.mine)
   const hasWeekend = entries.some((e) => [5, 6].includes((parseYmd(e.date).getDay() + 6) % 7))
   const dayCount = showWeekend || hasWeekend ? 7 : 5
   const days = Array.from({ length: dayCount }, (_, i) => addDays(week, i))
@@ -159,7 +214,7 @@ export function Tijd({ status }: { status: Status | null }) {
         </section>
       )}
       {status?.gitlabConfigured && !loading && !error && entries.length === 0 && (
-        <p className="muted small center">Geen uren gelogd in deze week.</p>
+        <Diagnose key={from} from={from} to={to} hiddenByFilter={(data ?? []).length - entries.length} />
       )}
     </div>
   )

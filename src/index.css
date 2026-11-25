@@ -216,3 +216,6 @@ dd { margin: 0; overflow-wrap: anywhere; }
   .view { padding: 1rem 1rem 3rem; }
   .table th:nth-child(5), .table td:nth-child(5) { display: none; }
 }
+
+.diagnose ul { margin: 0.3rem 0 0.6rem; padding-left: 1.1rem; display: grid; gap: 0.2rem; }
+.diagnose p { margin: 0.4rem 0; }

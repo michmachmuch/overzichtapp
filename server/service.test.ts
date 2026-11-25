@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
-import { addMinutes, monthsBetween, parseTimeEntry, Service } from './service.ts'
+import { addMinutes, monthsBetween, parseTimeEntries, parseTimeEntry, Service } from './service.ts'
 import { GitLabClient, type FetchLike } from './gitlab.ts'
 import { demoFetch } from './demo.ts'
 import { loadConfig } from './config.ts'
@@ -57,6 +57,14 @@ describe('helpers', () => {
     expect(parseTimeEntry('{"foo":1}')).toBeNull()
     expect(parseTimeEntry('not json')).toBeNull()
   })
+  it('reads files with several entries (array, wrapped array, JSON Lines, concatenated)', () => {
+    const two = JSON.parse(SAMPLE)
+    const other = { ...two, id: 'b', workTime: '15:00' }
+    expect(parseTimeEntries(JSON.stringify([two, other]))).toHaveLength(2)
+    expect(parseTimeEntries(JSON.stringify({ entries: [two, other] }))).toHaveLength(2)
+    expect(parseTimeEntries(JSON.stringify(two) + '\n' + JSON.stringify(other) + '\n')).toHaveLength(2)
+    expect(parseTimeEntries(JSON.stringify(two, null, 2) + '\n\n' + JSON.stringify(other, null, 2))).toHaveLength(2)
+  })
 })
 
 describe('Service', () => {
@@ -91,6 +99,30 @@ describe('Service', () => {
     expect(e).toMatchObject({ date: '2026-11-24', start: '16:00', end: '16:30', issueIid: 71, issueUrl: 'https://g/p/-/issues/71' })
     expect(e.commit?.url).toBe('https://g/p/-/commit/fff')
     expect(paths.some((p) => p.includes('path=.timetracking%2F2026%2F11') && p.includes('ref=develop'))).toBe(true)
+  })
+
+  it('recognises your entries by commit author when the userId differs from your GitLab id', async () => {
+    const fake: FetchLike = async (url) => {
+      const u = new URL(url)
+      const ok = (body: unknown) => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) })
+      if (u.pathname.endsWith('/user')) return ok({ id: 99, username: 'mischa', name: 'Mischa', email: 'm@school.nl' })
+      if (u.pathname.endsWith('/repository/tree')) return ok([{ id: 'abc', name: 'x.jsonl', type: 'blob', path: '.timetracking/2026/11/x.jsonl' }])
+      if (u.pathname.endsWith('/raw')) return ok(SAMPLE + '\n' + SAMPLE.replace('44b4db50', 'second').replace('16:00', '09:00'))
+      if (u.pathname.endsWith('/repository/commits')) return ok([{ id: 'f'.repeat(40), short_id: 'ffffffff', title: 't', web_url: 'https://g/p/-/commit/fff', created_at: '', author_name: 'Mischa', author_email: 'M@school.nl' }])
+      return ok({ id: 7023, name: 'P', web_url: 'https://g/p', path_with_namespace: 'p' })
+    }
+    const { service } = setup(fake)
+    const entries = await service.timeEntries('2026-11-23', '2026-11-29')
+    expect(entries).toHaveLength(2)
+    expect(entries.every((e) => e.mine)).toBe(true)
+  })
+
+  it('explains what it finds', async () => {
+    const { service } = setup()
+    const d = await service.diagnoseTime('2026-11-01', '2026-11-30')
+    expect(d.branches).toEqual(['develop'])
+    expect(d.folders[0].path).toBe('.timetracking/2026/11')
+    expect(d.entriesInRange).toBe(d.mine)
   })
 
   it('counts new issues and merge requests for check-ins', async () => {

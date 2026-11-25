@@ -33,6 +33,8 @@ export interface TimeEntry {
   processStepId: string | null
   skillId: string | null
   userId: number
+  /** Whether this entry is yours (by tijdregistratie userId or by commit author). */
+  mine: boolean
   file: string
   commit: { sha: string; shortSha: string; url: string; title: string } | null
 }
@@ -113,4 +115,17 @@ export interface Status {
   user: { id: number; username: string; name: string } | null
   branch: string
   error: string | null
+}
+
+export interface TimeDiagnosis {
+  branches: string[]
+  folders: { branch: string; path: string; files: number; error: string | null }[]
+  entriesInRange: number
+  mine: number
+  userIds: Record<string, number>
+  gitlabUserId: number
+  configuredUserId: number | null
+  /** Branches (other than the configured ones) with recent time-tracking commits. */
+  otherBranches: string[]
+  recentCommits: { title: string; url: string; author: string; date: string }[]
 }

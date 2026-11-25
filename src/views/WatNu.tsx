@@ -38,7 +38,7 @@ function TodayTime({ status }: { status: Status | null }) {
   if (!status?.gitlabConfigured) return null
   if (loading) return <div className="panel"><p className="muted small">Uren laden…</p></div>
   if (error) return <div className="panel"><p className="error small">Uren konden niet geladen worden: {error}</p></div>
-  const mine = (data ?? []).filter((e) => !status.user || e.userId === status.user.id)
+  const mine = (data ?? []).filter((e) => e.mine)
   const todays = mine.filter((e) => e.date === today)
   const total = todays.reduce((s, e) => s + e.durationMinutes, 0)
   const last = mine.at(-1)

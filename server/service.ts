@@ -2,12 +2,12 @@ import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import type { Config } from './config.ts'
 import { enc, GitLabClient, GitLabError } from './gitlab.ts'
-import type { Checkin, CheckinStatus, GitLabIssue, GitLabMergeRequest, RawTimeEntry, Status, TimeEntry } from '../shared/types.ts'
+import type { Checkin, CheckinStatus, GitLabIssue, GitLabMergeRequest, RawTimeEntry, Status, TimeDiagnosis, TimeEntry } from '../shared/types.ts'
 
 interface GLProject { id: number; name: string; web_url: string; path_with_namespace: string }
-interface GLUser { id: number; username: string; name: string }
+interface GLUser { id: number; username: string; name: string; email?: string; public_email?: string; commit_email?: string }
 interface GLTreeItem { id: string; name: string; type: 'blob' | 'tree'; path: string }
-interface GLCommit { id: string; short_id: string; title: string; web_url: string; created_at: string }
+interface GLCommit { id: string; short_id: string; title: string; web_url: string; created_at: string; author_name?: string; author_email?: string }
 interface GLIssue {
   iid: number; title: string; web_url: string; labels: string[]; created_at: string; updated_at: string
   milestone: { title: string } | null; due_date: string | null; author: { username: string; name: string }
@@ -52,15 +52,59 @@ export function monthsBetween(from: string, to: string): string[] {
   return out
 }
 
-export function parseTimeEntry(text: string): RawTimeEntry | null {
-  try {
-    const e = JSON.parse(text) as RawTimeEntry
-    if (typeof e !== 'object' || !e || typeof e.date !== 'string' || typeof e.workTime !== 'string' || typeof e.durationMinutes !== 'number') return null
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date) || !/^\d{1,2}:\d{2}$/.test(e.workTime)) return null
-    return e
-  } catch {
-    return null
+function isEntry(e: unknown): e is RawTimeEntry {
+  const x = e as RawTimeEntry
+  return !!x && typeof x === 'object' && typeof x.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date)
+    && typeof x.workTime === 'string' && /^\d{1,2}:\d{2}$/.test(x.workTime) && typeof x.durationMinutes === 'number'
+}
+
+/** Split text that holds several JSON objects one after another (JSON Lines or just concatenated). */
+function splitObjects(text: string): string[] {
+  const out: string[] = []
+  let depth = 0, start = -1, inStr = false, esc = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (ch === '\\') esc = true
+      else if (ch === '"') inStr = false
+      continue
+    }
+    if (ch === '"') inStr = true
+    else if (ch === '{') { if (depth === 0) start = i; depth++ }
+    else if (ch === '}' && depth > 0) { depth--; if (depth === 0 && start >= 0) { out.push(text.slice(start, i + 1)); start = -1 } }
   }
+  return out
+}
+
+/**
+ * Reads the time entries in one file. Accepts a single object, an array, an object with an
+ * array inside (e.g. { "entries": [...] }), or several objects one after another (JSON Lines).
+ */
+export function parseTimeEntries(text: string): RawTimeEntry[] {
+  try {
+    const v = JSON.parse(text) as unknown
+    if (Array.isArray(v)) return v.filter(isEntry)
+    if (isEntry(v)) return [v]
+    if (v && typeof v === 'object') {
+      for (const val of Object.values(v)) if (Array.isArray(val)) return val.filter(isEntry)
+    }
+    return []
+  } catch {
+    const out: RawTimeEntry[] = []
+    for (const chunk of splitObjects(text)) {
+      try {
+        const v = JSON.parse(chunk) as unknown
+        if (isEntry(v)) out.push(v)
+      } catch { /* skip */ }
+    }
+    return out
+  }
+}
+
+export function parseTimeEntry(text: string): RawTimeEntry | null {
+  const all = parseTimeEntries(text)
+  return all.length === 1 ? all[0] : null
 }
 
 export class Service {
@@ -69,7 +113,7 @@ export class Service {
   private project: GLProject | null = null
   private user: GLUser | null = null
   /** Blob contents never change for a given blob sha, so they are cached forever. */
-  private readonly blobCache = new Map<string, RawTimeEntry | null>()
+  private readonly blobCache = new Map<string, RawTimeEntry[]>()
   private readonly commitCache = new Map<string, GLCommit | null>()
 
   private readonly cacheFile: string | null
@@ -82,7 +126,8 @@ export class Service {
     if (cacheFile) {
       // Time entries never change once committed, so keep them across restarts.
       try {
-        const saved = JSON.parse(readFileSync(cacheFile, 'utf8')) as { blobs: [string, RawTimeEntry | null][]; commits: [string, GLCommit | null][] }
+        const saved = JSON.parse(readFileSync(cacheFile, 'utf8')) as { v?: number; blobs: [string, RawTimeEntry[]][]; commits: [string, GLCommit | null][] }
+        if (saved.v !== 2) throw new Error('old cache')
         for (const [k, v] of saved.blobs) this.blobCache.set(k, v)
         for (const [k, v] of saved.commits) this.commitCache.set(k, v)
       } catch {
@@ -95,7 +140,7 @@ export class Service {
     if (!this.cacheFile || !this.cacheDirty) return
     this.cacheDirty = false
     try {
-      await writeFile(this.cacheFile, JSON.stringify({ blobs: [...this.blobCache], commits: [...this.commitCache] }))
+      await writeFile(this.cacheFile, JSON.stringify({ v: 2, blobs: [...this.blobCache], commits: [...this.commitCache] }))
     } catch {
       /* cache is optional */
     }
@@ -128,43 +173,61 @@ export class Service {
       return {
         ...base,
         project: { id: project.id, name: project.name, url: project.web_url },
-        user: { id: this.config.timetrackingUserId ?? user.id, username: user.username, name: user.name },
+        user: { id: user.id, username: user.username, name: user.name },
       }
     } catch (e) {
       return { ...base, error: (e as Error).message }
     }
   }
 
-  async timeEntries(from: string, to: string): Promise<TimeEntry[]> {
-    const { project } = await this.ensure()
-    const files: GLTreeItem[] = []
-    for (const month of monthsBetween(from, to)) {
-      try {
-        const items = await this.gl.getAll<GLTreeItem>(`/projects/${project.id}/repository/tree`, {
-          path: `${this.config.timetrackingDir}/${month}`,
-          ref: this.config.branch,
-          recursive: true,
-        })
-        files.push(...items.filter((i) => i.type === 'blob' && i.name.endsWith('.json')))
-      } catch (e) {
-        // A month without any entries has no folder yet.
-        if (e instanceof GitLabError && e.status === 404) continue
-        throw e
+  private get branches(): string[] {
+    return this.config.branch.split(',').map((b) => b.trim()).filter(Boolean)
+  }
+
+  /** All files under .timetracking/YYYY/MM for the months in the range, per branch. */
+  private async listFiles(projectId: number, from: string, to: string) {
+    const files: (GLTreeItem & { branch: string })[] = []
+    const folders: TimeDiagnosis['folders'] = []
+    for (const branch of this.branches) {
+      for (const month of monthsBetween(from, to)) {
+        const path = `${this.config.timetrackingDir}/${month}`
+        try {
+          const items = await this.gl.getAll<GLTreeItem>(`/projects/${projectId}/repository/tree`, { path, ref: branch, recursive: true })
+          const blobs = items.filter((i) => i.type === 'blob' && !/\.(md|gitkeep|txt)$/i.test(i.name) && i.name !== '.gitkeep')
+          folders.push({ branch, path, files: blobs.length, error: null })
+          files.push(...blobs.map((b) => ({ ...b, branch })))
+        } catch (e) {
+          // A month without any entries has no folder yet.
+          folders.push({ branch, path, files: 0, error: e instanceof GitLabError && e.status === 404 ? 'map bestaat niet op deze branch' : (e as Error).message })
+          if (!(e instanceof GitLabError && e.status === 404)) throw e
+        }
       }
     }
+    return { files, folders }
+  }
 
-    const entries = await pool(files, 6, async (file) => {
+  private isMine(user: GLUser, raw: RawTimeEntry, commit: GLCommit | null, learned: Set<number>): boolean {
+    if (this.config.timetrackingUserId !== null) return raw.userId === this.config.timetrackingUserId
+    if (raw.userId === user.id || learned.has(raw.userId)) return true
+    return authoredBy(user, commit)
+  }
+
+  async timeEntries(from: string, to: string): Promise<TimeEntry[]> {
+    const { project, user } = await this.ensure()
+    const { files } = await this.listFiles(project.id, from, to)
+
+    const perFile = await pool(files, 6, async (file) => {
       if (!this.blobCache.has(file.id)) {
         const text = await this.gl.getText(`/projects/${project.id}/repository/blobs/${file.id}/raw`)
-        this.blobCache.set(file.id, parseTimeEntry(text))
+        this.blobCache.set(file.id, parseTimeEntries(text))
         this.cacheDirty = true
       }
-      const raw = this.blobCache.get(file.id)
-      if (!raw || raw.date < from || raw.date > to) return null
+      const raws = (this.blobCache.get(file.id) ?? []).filter((r) => r.date >= from && r.date <= to)
+      if (!raws.length) return []
       const commitKey = `${file.path}@${file.id}`
       if (!this.commitCache.has(commitKey)) {
         const commits = await this.gl.get<GLCommit[]>(`/projects/${project.id}/repository/commits`, {
-          ref_name: this.config.branch,
+          ref_name: file.branch,
           path: file.path,
           per_page: 1,
         })
@@ -172,8 +235,21 @@ export class Service {
         this.cacheDirty = true
       }
       const c = this.commitCache.get(commitKey) ?? null
-      const entry: TimeEntry = {
-        id: raw.id ?? file.id,
+      return raws.map((raw, i) => ({ raw, file, c, i }))
+    })
+    await this.persistCache()
+
+    // If your commits carry a tijdregistratie userId that differs from your GitLab id, learn it.
+    const flat = perFile.flat()
+    const learned = new Set(flat.filter((x) => authoredBy(user, x.c)).map((x) => x.raw.userId))
+    const seen = new Set<string>()
+    const entries: TimeEntry[] = []
+    for (const { raw, file, c, i } of flat) {
+      const id = raw.id ?? `${file.id}-${i}`
+      if (seen.has(id)) continue
+      seen.add(id)
+      entries.push({
+        id,
         date: raw.date,
         start: raw.workTime.padStart(5, '0'),
         end: addMinutes(raw.workTime, raw.durationMinutes),
@@ -184,13 +260,47 @@ export class Service {
         processStepId: raw.processStepId ?? null,
         skillId: raw.skillId ?? null,
         userId: raw.userId,
+        mine: this.isMine(user, raw, c, learned),
         file: file.path,
         commit: c ? { sha: c.id, shortSha: c.short_id, url: c.web_url, title: c.title } : null,
-      }
-      return entry
-    })
-    await this.persistCache()
-    return entries.filter((e): e is TimeEntry => e !== null).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
+      })
+    }
+    return entries.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
+  }
+
+  /** Explains what the app finds, to help when no hours show up. */
+  async diagnoseTime(from: string, to: string): Promise<TimeDiagnosis> {
+    const { project, user } = await this.ensure()
+    const { folders } = await this.listFiles(project.id, from, to)
+    const entries = await this.timeEntries(from, to)
+    const userIds: Record<string, number> = {}
+    for (const e of entries) userIds[e.userId] = (userIds[e.userId] ?? 0) + 1
+    // Look on every branch for commits that touch the time-tracking folders.
+    const otherBranches = new Set<string>()
+    let recentCommits: TimeDiagnosis['recentCommits'] = []
+    for (const month of monthsBetween(from, to)) {
+      try {
+        const commits = await this.gl.get<GLCommit[]>(`/projects/${project.id}/repository/commits`, {
+          all: true, path: `${this.config.timetrackingDir}/${month}`, per_page: 5,
+        })
+        recentCommits = recentCommits.concat(commits.map((c) => ({ title: c.title, url: c.web_url, author: c.author_name ?? '', date: c.created_at })))
+        for (const c of commits.slice(0, 3)) {
+          const refs = await this.gl.get<{ type: string; name: string }[]>(`/projects/${project.id}/repository/commits/${c.id}/refs`, { type: 'branch' })
+          for (const r of refs) if (!this.branches.includes(r.name)) otherBranches.add(r.name)
+        }
+      } catch { /* diagnostics are best effort */ }
+    }
+    return {
+      branches: this.branches,
+      folders,
+      entriesInRange: entries.length,
+      mine: entries.filter((e) => e.mine).length,
+      userIds,
+      gitlabUserId: user.id,
+      configuredUserId: this.config.timetrackingUserId,
+      otherBranches: [...otherBranches],
+      recentCommits: recentCommits.slice(0, 5),
+    }
   }
 
   async myIssues(): Promise<GitLabIssue[]> {
@@ -249,4 +359,11 @@ function toIssue(i: GLIssue): GitLabIssue {
     iid: i.iid, title: i.title, url: i.web_url, labels: i.labels, createdAt: i.created_at, updatedAt: i.updated_at,
     milestone: i.milestone?.title ?? null, dueDate: i.due_date, author: i.author.name,
   }
+}
+
+function authoredBy(user: GLUser, c: GLCommit | null): boolean {
+  if (!c) return false
+  const emails = [user.email, user.public_email, user.commit_email].filter(Boolean).map((e) => e!.toLowerCase())
+  if (c.author_email && emails.includes(c.author_email.toLowerCase())) return true
+  return !!c.author_name && (c.author_name === user.name || c.author_name === user.username)
 }

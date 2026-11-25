@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { CheckinStatus, GitLabIssue, LocalData, Status, TimeEntry } from '../shared/types'
+import type { CheckinStatus, GitLabIssue, LocalData, Status, TimeDiagnosis, TimeEntry } from '../shared/types'
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } })
@@ -11,6 +11,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   status: () => call<Status>('/api/status'),
   time: (from: string, to: string) => call<TimeEntry[]>(`/api/time?from=${from}&to=${to}`),
+  diagnoseTime: (from: string, to: string) => call<TimeDiagnosis>(`/api/time/diagnose?from=${from}&to=${to}`),
   issues: () => call<GitLabIssue[]>('/api/issues'),
   checkins: () => call<CheckinStatus[]>('/api/checkins'),
   markChecked: (id: string) => call<LocalData>(`/api/checkins/${id}/checked`, { method: 'POST' }),
