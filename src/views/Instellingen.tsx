@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { newId } from '../api'
 import type { Checkin, CheckinKind, Deadline, LocalData, Status } from '../../shared/types'
 import { Modal } from '../components/Modal'
+import { TimeSelect } from '../components/TimeSelect'
 
 const KIND_LABELS: Record<CheckinKind, string> = {
   link: 'Link (bijv. WhatsApp, Teams, e-mail)',
@@ -99,7 +100,7 @@ export function Instellingen({ status, data, save }: { status: Status | null; da
         }}>
           <input value={dl.title} onChange={(e) => setDl({ ...dl, title: e.target.value })} placeholder="Bijv. Sprint review" aria-label="Naam deadline" />
           <input type="date" value={dl.date} onChange={(e) => setDl({ ...dl, date: e.target.value })} aria-label="Datum" required className="w-auto" />
-          <input type="time" value={dl.time} onChange={(e) => setDl({ ...dl, time: e.target.value })} aria-label="Tijd (optioneel)" className="w-auto" />
+          <TimeSelect value={dl.time} onChange={(time) => setDl({ ...dl, time })} label="Tijd (optioneel)" />
           <button className="btn btn-primary" type="submit">Toevoegen</button>
         </form>
         <ul className="settings-list">

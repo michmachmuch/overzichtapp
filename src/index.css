@@ -219,3 +219,5 @@ dd { margin: 0; overflow-wrap: anywhere; }
 
 .diagnose ul { margin: 0.3rem 0 0.6rem; padding-left: 1.1rem; display: grid; gap: 0.2rem; }
 .diagnose p { margin: 0.4rem 0; }
+.time-select { display: inline-flex; align-items: center; gap: 0.25rem; }
+.time-select select { width: auto; }
