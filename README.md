@@ -1,36 +1,55 @@
 # Overzicht
 
-A small web app that helps you keep an overview while building a project with scrum:
-a product backlog, sprints, a sprint board and an overview with progress, burndown and velocity.
+A personal overview app for a school scrum project. Open it whenever you finish
+something and wonder "what now?". The screens are in Dutch.
 
-## Features
+- **Wat nu?** Deadline countdowns, how much time you logged today and when your last
+  activity ended, check-ins (WhatsApp, issue board, merge requests, plus your own),
+  your GitLab issues and your own to-do's.
+- **Tijd** A week calendar of the time you logged with *tijdregistratie*. Clicking an
+  entry opens its commit in GitLab.
+- **Instellingen** Manage check-ins and deadlines, and see the GitLab connection.
 
-- **Projects**: keep several projects apart and switch between them.
-- **Backlog**: user stories with MoSCoW priority, story points, assignee. Reorder, filter, search, and drag stories into a sprint.
-- **Sprints**: plan sprints with a goal and dates, start one at a time, complete it (unfinished stories return to the backlog).
-- **Board**: To do / In progress / Done for the active sprint, with drag and drop.
-- **Overview**: sprint progress, days left, burndown chart, velocity per sprint, workload per person.
-- **Team**: optional people to assign stories to.
-- **Backup**: download and restore all data as a JSON file.
+## GitLab is read-only
 
-Data is stored in your browser (`localStorage`). Nothing is sent to a server.
+The app reads from the school GitLab (time entries in `.timetracking/YYYY/MM/*.json`
+on `develop`, issues, merge requests) and **never writes to it**. The GitLab client
+can only send `GET` requests, and a test checks that. Use a token with only the
+`read_api` scope.
 
-## Getting started
+## Run it with Docker
+
+1. Create a personal access token in GitLab with only the **read_api** scope.
+2. Copy `.env.example` to `.env` and fill in `GITLAB_TOKEN` (the project path is already set).
+3. Start it:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+4. Open <http://localhost:8080>.
+
+Stop it with `docker compose stop` (or the stop button in Docker Desktop).
+Your check-ins, deadlines and to-do's are kept in the `overzicht-data` volume.
+
+To try it without GitLab, set `DEMO=1` in `.env`.
+
+`.env` holds your token and is in `.gitignore`. Never commit it.
+
+## Develop
+
+Requires Node 22.18 or newer (the server runs TypeScript directly, no extra dependencies).
 
 ```bash
 npm install
-npm run dev      # start at http://localhost:5173
-npm test         # run the unit tests
-npm run build    # production build in dist/
+npm run server:demo   # API on :8080 with example data (or: npm run server, uses .env)
+npm run dev           # web app on :5173, proxies /api to :8080
+npm test
+npm run build
 ```
 
-Tech: React 19, TypeScript, Vite. No other runtime dependencies.
-
-## Project structure
-
 ```
-src/
-  state/        data model, reducer (all logic), storage, example data
-  components/   shared UI: modal, story card/form, charts, avatar
-  views/        Overview, Board, Backlog, Sprints, Team, Settings
+server/   Node HTTP server: GitLab client (GET only), time entries, check-ins, local data store
+shared/   Types used by server and web app
+src/      React web app (views: WatNu, Tijd, Instellingen)
 ```
