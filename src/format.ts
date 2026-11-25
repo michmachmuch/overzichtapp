@@ -63,3 +63,19 @@ export function daysUntil(date: string, today = new Date()): number {
   const a = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   return Math.round((parseYmd(date).getTime() - a.getTime()) / 86400000)
 }
+
+/** YYYY-MM-DD → dd/mm/yyyy */
+export function dmy(isoDate: string): string {
+  const [y, m, d] = isoDate.slice(0, 10).split('-')
+  return d && m && y ? `${d}/${m}/${y}` : isoDate
+}
+
+/** dd/mm/yyyy (also d-m-yyyy or d.m.yyyy) → YYYY-MM-DD, or null when it isn't a real date. */
+export function parseDmy(text: string): string | null {
+  const m = text.trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/)
+  if (!m) return null
+  const [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])]
+  const date = new Date(y, mo - 1, d)
+  if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d) return null
+  return ymd(date)
+}

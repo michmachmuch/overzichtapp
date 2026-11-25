@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api, useLoad } from '../api'
-import { addDays, DAYS_SHORT, duration, isoWeek, MONTHS, parseYmd, startOfWeek, toMinutes, ymd } from '../format'
+import { addDays, dmy, DAYS_SHORT, duration, isoWeek, MONTHS, parseYmd, startOfWeek, toMinutes, ymd } from '../format'
 import type { Status, TimeDiagnosis, TimeEntry } from '../../shared/types'
 
 const HOUR_PX = 48
@@ -18,7 +18,7 @@ function Detail({ e, onClose }: { e: TimeEntry; onClose: () => void }) {
         <button className="icon-btn" onClick={onClose} aria-label="Sluiten">✕</button>
       </div>
       <dl>
-        <dt>Wanneer</dt><dd>{e.date}, {e.start}–{e.end} ({duration(e.durationMinutes)})</dd>
+        <dt>Wanneer</dt><dd>{dmy(e.date)}, {e.start}–{e.end} ({duration(e.durationMinutes)})</dd>
         {e.issueIid && <><dt>Issue</dt><dd><a href={e.issueUrl ?? '#'} target="_blank" rel="noreferrer">#{e.issueIid}</a></dd></>}
         {e.processStepId && <><dt>Processtap</dt><dd>{e.processStepId}</dd></>}
         {e.skillId && <><dt>Vaardigheid</dt><dd>{e.skillId}</dd></>}
@@ -76,7 +76,7 @@ function Diagnose({ from, to, hiddenByFilter }: { from: string; to: string; hidd
               <p><strong>Laatste commits in de tijdregistratie-map (alle branches):</strong></p>
               <ul>
                 {diag.recentCommits.map((c) => (
-                  <li key={c.url}><a href={c.url} target="_blank" rel="noreferrer">{c.title}</a> <span className="muted">{c.author}, {c.date.slice(0, 16).replace('T', ' ')}</span></li>
+                  <li key={c.url}><a href={c.url} target="_blank" rel="noreferrer">{c.title}</a> <span className="muted">{c.author}, {dmy(c.date)} {c.date.slice(11, 16)}</span></li>
                 ))}
               </ul>
             </>

@@ -3,6 +3,8 @@ import { newId } from '../api'
 import type { Checkin, CheckinKind, Deadline, LocalData, Status } from '../../shared/types'
 import { Modal } from '../components/Modal'
 import { TimeSelect } from '../components/TimeSelect'
+import { DateInput } from '../components/DateInput'
+import { dmy } from '../format'
 
 const KIND_LABELS: Record<CheckinKind, string> = {
   link: 'Link (bijv. WhatsApp, Teams, e-mail)',
@@ -99,14 +101,14 @@ export function Instellingen({ status, data, save }: { status: Status | null; da
           setDl({ title: '', date: '', time: '' })
         }}>
           <input value={dl.title} onChange={(e) => setDl({ ...dl, title: e.target.value })} placeholder="Bijv. Sprint review" aria-label="Naam deadline" />
-          <input type="date" value={dl.date} onChange={(e) => setDl({ ...dl, date: e.target.value })} aria-label="Datum" required className="w-auto" />
+          <DateInput value={dl.date} onChange={(date) => setDl({ ...dl, date })} label="Datum" />
           <TimeSelect value={dl.time} onChange={(time) => setDl({ ...dl, time })} label="Tijd (optioneel)" />
           <button className="btn btn-primary" type="submit">Toevoegen</button>
         </form>
         <ul className="settings-list">
           {deadlines.map((d) => (
             <li key={d.id}>
-              <div className="grow"><strong>{d.title}</strong> <span className="muted small">{d.date}{d.time ? ` ${d.time}` : ''}</span></div>
+              <div className="grow"><strong>{d.title}</strong> <span className="muted small">{dmy(d.date)}{d.time ? ` ${d.time}` : ''}</span></div>
               <button className="icon-btn" aria-label={`Verwijder ${d.title}`} onClick={() => save({ ...data, deadlines: data.deadlines.filter((x) => x.id !== d.id) })}>✕</button>
             </li>
           ))}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api, newId, useLoad } from '../api'
-import { addDays, daysUntil, duration, longDate, parseYmd, relative, toMinutes, ymd } from '../format'
+import { addDays, dmy, daysUntil, duration, longDate, parseYmd, relative, toMinutes, ymd } from '../format'
 import type { CheckinStatus, LocalData, Status } from '../../shared/types'
 
 interface Props {
@@ -144,7 +144,7 @@ function Issues({ status }: { status: Status | null }) {
             <a href={i.url} target="_blank" rel="noreferrer"><span className="muted">#{i.iid}</span> {i.title}</a>
             <div className="labels">
               {i.labels.map((l) => <span key={l} className="label">{l}</span>)}
-              {i.dueDate && <span className="label label-due">deadline {i.dueDate}</span>}
+              {i.dueDate && <span className="label label-due">deadline {dmy(i.dueDate)}</span>}
             </div>
           </li>
         ))}

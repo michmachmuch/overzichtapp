@@ -221,3 +221,8 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .diagnose p { margin: 0.4rem 0; }
 .time-select { display: inline-flex; align-items: center; gap: 0.25rem; }
 .time-select select { width: auto; }
+.date-input { position: relative; display: inline-flex; align-items: center; gap: 0.15rem; }
+.date-input input:not(.date-native) { width: 8.5rem; }
+.date-input .is-invalid { border-color: var(--danger); }
+.date-native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+.date-input .is-invalid, .date-input .is-invalid:focus { outline-color: var(--danger); border-color: var(--danger); }
