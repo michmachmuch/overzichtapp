@@ -53,7 +53,7 @@ export default function App() {
         {local.error && <p className="banner error">Kan de server niet bereiken: {local.error}</p>}
         {status.data?.error && route !== 'instellingen' && <p className="banner error">GitLab: {status.data.error}</p>}
         {local.data && route === 'wat-nu' && <WatNu status={status.data} data={local.data} save={save} setData={setData} />}
-        {local.data && route === 'tijd' && <Tijd status={status.data} />}
+        {local.data && route === 'tijd' && <Tijd status={status.data} sprints={local.data.sprints} sprintHoursTarget={local.data.sprintHoursTarget} />}
         {local.data && route === 'instellingen' && <Instellingen status={status.data} data={local.data} save={save} />}
       </main>
     </div>
