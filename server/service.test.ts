@@ -8,7 +8,7 @@ import { addMinutes, monthsBetween, parseTimeEntries, parseTimeEntry, Service } 
 import { GitLabClient, type FetchLike } from './gitlab.ts'
 import { demoFetch } from './demo.ts'
 import { loadConfig } from './config.ts'
-import { Store } from './store.ts'
+import { migrate, Store } from './store.ts'
 import { createApp } from './app.ts'
 import type { LocalData } from '../shared/types.ts'
 
@@ -147,6 +147,13 @@ describe('Service', () => {
   it('has no code that can write to GitLab', () => {
     const src = readFileSync(new URL('./gitlab.ts', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     expect(src).not.toMatch(/['"](POST|PUT|PATCH|DELETE)['"]/)
+  })
+})
+
+describe('local data', () => {
+  it('upgrades data saved by an older version', () => {
+    const old = { version: 1, checkins: [], deadlines: [], todos: [] } as unknown as LocalData
+    expect(migrate(old)).toMatchObject({ sprints: [], sprintHoursTarget: 64 })
   })
 })
 

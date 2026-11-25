@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import type { Service } from './service.ts'
-import { isLocalData, type Store } from './store.ts'
+import { isLocalData, migrate, type Store } from './store.ts'
 import { GitLabError } from './gitlab.ts'
 
 const MIME: Record<string, string> = {
@@ -74,8 +74,9 @@ export function createApp(service: Service, store: Store, staticDir: string | nu
         if (req.method === 'PUT' && path === '/api/data') {
           const body = await readBody(req)
           if (!isLocalData(body)) return send(res, 400, { error: 'Ongeldige data' })
-          await store.write(body)
-          return send(res, 200, body)
+          const data = migrate(body)
+          await store.write(data)
+          return send(res, 200, data)
         }
         return send(res, 404, { error: 'Niet gevonden' })
       }

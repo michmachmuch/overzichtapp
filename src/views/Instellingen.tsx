@@ -59,6 +59,9 @@ export function Instellingen({ status, data, save }: { status: Status | null; da
     ;[list[i], list[j]] = [list[j], list[i]]
     save({ ...data, checkins: list })
   }
+  const [sp, setSp] = useState({ name: '', start: '', end: '' })
+  const sprintInvalid = !!sp.start && !!sp.end && sp.end < sp.start
+  const sprints = [...data.sprints].sort((a, b) => a.start.localeCompare(b.start))
   const deadlines = [...data.deadlines].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
 
   return (
@@ -89,6 +92,45 @@ export function Instellingen({ status, data, save }: { status: Status | null; da
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="panel">
+        <h2>Sprints</h2>
+        <p className="muted small">Van wanneer tot wanneer een sprint loopt. Op "Wat nu?" zie je hoeveel uur je in de huidige sprint hebt gelogd.</p>
+        <form className="inline-form" onSubmit={(e) => {
+          e.preventDefault()
+          if (!sp.start || !sp.end || sprintInvalid) return
+          const name = sp.name.trim() || `Sprint ${data.sprints.length + 1}`
+          save({ ...data, sprints: [...data.sprints, { id: newId(), name, start: sp.start, end: sp.end }] })
+          setSp({ name: '', start: '', end: '' })
+        }}>
+          <input value={sp.name} onChange={(e) => setSp({ ...sp, name: e.target.value })} placeholder={`Sprint ${data.sprints.length + 1}`} aria-label="Naam sprint" />
+          <span className="muted small">van</span>
+          <DateInput value={sp.start} onChange={(start) => setSp({ ...sp, start })} label="Startdatum sprint" />
+          <span className="muted small">t/m</span>
+          <DateInput value={sp.end} onChange={(end) => setSp({ ...sp, end })} label="Einddatum sprint" />
+          <button className="btn btn-primary" type="submit" disabled={!sp.start || !sp.end || sprintInvalid}>Toevoegen</button>
+        </form>
+        {sprintInvalid && <p className="error small">De einddatum ligt voor de startdatum.</p>}
+        <ul className="settings-list">
+          {sprints.map((x) => (
+            <li key={x.id}>
+              <div className="grow"><strong>{x.name}</strong> <span className="muted small">{dmy(x.start)} t/m {dmy(x.end)}</span></div>
+              <button className="icon-btn" aria-label={`Verwijder ${x.name}`} onClick={() => confirm(`"${x.name}" verwijderen?`) && save({ ...data, sprints: data.sprints.filter((y) => y.id !== x.id) })}>✕</button>
+            </li>
+          ))}
+        </ul>
+        <label className="target-hours">
+          Uren per sprint
+          <input
+            type="number"
+            min={1}
+            max={500}
+            value={data.sprintHoursTarget}
+            onChange={(e) => { const n = Number(e.target.value); if (n > 0) save({ ...data, sprintHoursTarget: n }) }}
+            aria-label="Uren per sprint"
+          />
+        </label>
       </section>
 
       <section className="panel">
