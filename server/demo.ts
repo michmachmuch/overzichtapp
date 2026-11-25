@@ -81,7 +81,7 @@ export function demoFetch(): FetchLike {
     const p = u.pathname.replace(/^\/api\/v4/, '')
     const q = u.searchParams
     if (p === '/user') return respond(USER)
-    if (p.endsWith('/members/all')) return respond(TEAM)
+    if (p.endsWith('/members/all')) return respond([...TEAM, { id: 5001, username: 'docent', name: 'Docent (logt geen uren)', state: 'active' }])
     if (/^\/projects\/[^/]+$/.test(p)) return respond(PROJECT)
     if (p.endsWith('/repository/tree')) {
       const dir = q.get('path') ?? ''

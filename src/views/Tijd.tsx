@@ -124,12 +124,15 @@ export function Tijd({ status }: { status: Status | null }) {
 
   const all = data ?? []
   const me = members.data?.find((m) => m.isMe)
+  const meKeyOf = () => (me ? String(me.id) : null)
   // Everyone to pick from: team members from GitLab plus anyone else found in the entries.
   const people: { key: string; label: string }[] = (members.data ?? []).map((m) => ({ key: String(m.id), label: m.isMe ? `${m.name} (ik)` : m.name }))
   for (const e of all) {
     const k = personKey(e)
     if (!people.some((p) => p.key === k)) people.push({ key: k, label: e.personName ?? `Onbekend (userId ${e.userId})` })
   }
+  // Only offer people who logged time in this week (you and the current choice always stay).
+  const pickerPeople = people.filter((p) => all.some((e) => personKey(e) === p.key) || p.key === meKeyOf() || p.key === person)
   const minutesOf = (key: string) => all.filter((e) => (key === 'all' ? true : personKey(e) === key)).reduce((s, e) => s + e.durationMinutes, 0)
   const meKey = me ? String(me.id) : null
   const selectedKey = person === 'me' ? meKey : person
@@ -174,8 +177,8 @@ export function Tijd({ status }: { status: Status | null }) {
         <label className="person-picker">
           <span className="muted small">Uren van</span>
           <select value={selectedKey && person === 'me' ? selectedKey : person} onChange={(e) => setPerson(e.target.value === meKey ? 'me' : e.target.value)} aria-label="Teamlid">
-            {people.map((p) => <option key={p.key} value={p.key}>{p.label} · {duration(minutesOf(p.key))}</option>)}
-            {people.length === 0 && <option value="me">Ik</option>}
+            {pickerPeople.map((p) => <option key={p.key} value={p.key}>{p.label} · {duration(minutesOf(p.key))}</option>)}
+            {pickerPeople.length === 0 && <option value="me">Ik</option>}
             <option value="all">Iedereen · {duration(minutesOf('all'))}</option>
           </select>
         </label>
