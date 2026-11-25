@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api, newId, useLoad } from '../api'
 import { addDays, dmy, daysUntil, duration, longDate, parseYmd, relative, toMinutes, ymd } from '../format'
 import type { CheckinStatus, LocalData, Status } from '../../shared/types'
+import { currentSprint, nextSprint, sprintProgress } from '../sprint'
 
 interface Props {
   status: Status | null
@@ -28,6 +29,78 @@ function Countdowns({ data }: { data: LocalData }) {
         </div>
       ))}
     </div>
+  )
+}
+
+const STATUS_TEXT = {
+  klaar: 'Doel gehaald 🎉',
+  voor: 'Je loopt voor',
+  'op-schema': 'Je ligt op schema',
+  achter: 'Je loopt achter',
+} as const
+
+function SprintHours({ status, data }: { status: Status | null; data: LocalData }) {
+  const sprint = currentSprint(data.sprints)
+  const today = ymd(new Date())
+  const range = sprint ?? { start: today, end: today }
+  const { data: entries, error, loading } = useLoad(
+    () => (sprint && status?.gitlabConfigured ? api.time(range.start, range.end) : Promise.resolve([])),
+    [range.start, range.end, status?.gitlabConfigured],
+  )
+  if (!sprint) {
+    const next = nextSprint(data.sprints)
+    return (
+      <section className="panel sprint-hours">
+        <h2>Sprint-uren</h2>
+        <p className="muted small">
+          {next
+            ? <>Er loopt nu geen sprint. <strong>{next.name}</strong> begint op {dmy(next.start)}{next.startTime ? ` om ${next.startTime}` : ''}.</>
+            : <>Stel je sprints in bij <a href="#/instellingen">Instellingen</a> om je voortgang naar {data.sprintHoursTarget} uur te zien.</>}
+        </p>
+      </section>
+    )
+  }
+  const p = sprintProgress(sprint, (entries ?? []).filter((e) => e.mine), data.sprintHoursTarget, today)
+  const pct = Math.min(100, (p.loggedMinutes / p.targetMinutes) * 100)
+  const expectedPct = Math.min(100, (p.expectedMinutes / p.targetMinutes) * 100)
+  const hours = (m: number) => (m / 60).toLocaleString('nl-NL', { maximumFractionDigits: 1 })
+  return (
+    <section className={`panel sprint-hours status-${p.status}`}>
+      <div className="panel-head">
+        <div>
+          <h2>{sprint.name}</h2>
+          <p className="muted small">{dmy(sprint.start)}{sprint.startTime ? ` ${sprint.startTime}` : ''} t/m {dmy(sprint.end)}{sprint.endTime ? ` ${sprint.endTime}` : ''} · nog {p.workdaysLeft} {p.workdaysLeft === 1 ? 'werkdag' : 'werkdagen'}</p>
+        </div>
+        <div className="sprint-hours-num">
+          <strong>{hours(p.loggedMinutes)}</strong> / {data.sprintHoursTarget} uur
+        </div>
+      </div>
+      {error && <p className="error small">Uren konden niet geladen worden: {error}</p>}
+      <div
+        className="hours-bar"
+        role="progressbar"
+        aria-label="Gelogde uren deze sprint"
+        aria-valuemin={0}
+        aria-valuemax={data.sprintHoursTarget}
+        aria-valuenow={Math.round(p.loggedMinutes / 60)}
+        aria-valuetext={`${hours(p.loggedMinutes)} van ${data.sprintHoursTarget} uur`}
+      >
+        <div className="hours-fill" style={{ width: `${pct}%` }} />
+        {p.status !== 'klaar' && <div className="hours-expected" style={{ left: `${expectedPct}%` }} title={`Verwacht rond vandaag: ${hours(p.expectedMinutes)} uur`} />}
+      </div>
+      {!loading && (
+        <p className="small sprint-hours-status">
+          <strong>{STATUS_TEXT[p.status]}</strong>
+          {p.status !== 'klaar' && (
+            <>
+              {' '}· nog {hours(p.remainingMinutes)} uur te gaan
+              {p.workdaysLeft > 0 && <>, gemiddeld {duration(p.perDayMinutes)} per werkdag</>}
+              {' '}· <span className="muted">streepje = waar je bij een gelijk tempo nu zou zitten ({hours(p.expectedMinutes)} uur)</span>
+            </>
+          )}
+        </p>
+      )}
+    </section>
   )
 }
 
@@ -205,6 +278,7 @@ export function WatNu({ status, data, save, setData }: Props) {
         </div>
       </header>
       <Countdowns data={data} />
+      <SprintHours status={status} data={data} />
       <TodayTime status={status} />
       <Checkins setData={setData} />
       <div className="two-col">

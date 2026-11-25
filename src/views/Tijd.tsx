@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { api, useLoad } from '../api'
 import { addDays, dmy, DAYS_SHORT, duration, isoWeek, MONTHS, parseYmd, startOfWeek, toMinutes, ymd } from '../format'
-import type { Status, TimeDiagnosis, TimeEntry } from '../../shared/types'
+import type { Sprint, Status, TimeDiagnosis, TimeEntry } from '../../shared/types'
+import { sprintEnd, sprintStart, stamp } from '../sprint'
 
 const HOUR_PX = 48
 
@@ -98,7 +99,7 @@ const PERSON_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 
 
 const personKey = (e: TimeEntry) => (e.personId !== null ? String(e.personId) : `u${e.userId}`)
 
-export function Tijd({ status }: { status: Status | null }) {
+export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | null; sprints: Sprint[]; sprintHoursTarget: number }) {
   const [week, setWeekState] = useState(readWeek)
   const [person, setPersonState] = useState(readPerson)
   const members = useLoad(() => (status?.gitlabConfigured ? api.members() : Promise.resolve([])), [status?.gitlabConfigured])
@@ -107,6 +108,14 @@ export function Tijd({ status }: { status: Status | null }) {
   const from = ymd(week)
   const to = ymd(addDays(week, 6))
   const { data, error, loading, reload } = useLoad(() => (status?.gitlabConfigured ? api.time(from, to) : Promise.resolve([])), [from, to, status?.gitlabConfigured])
+  // Totals are counted over the sprint this week belongs to (the running one if several overlap).
+  const now = stamp()
+  const overlapping = sprints.filter((s) => s.start <= to && s.end >= from)
+  const sprint = overlapping.find((s) => sprintStart(s) <= now && now < sprintEnd(s)) ?? [...overlapping].sort((a, b) => b.start.localeCompare(a.start))[0] ?? null
+  const sprintData = useLoad(
+    () => (sprint && status?.gitlabConfigured ? api.time(sprint.start, sprint.end) : Promise.resolve(null)),
+    [sprint?.start, sprint?.end, status?.gitlabConfigured],
+  )
 
   const writeHash = (w: Date, p: string) =>
     window.history.replaceState(null, '', `#/tijd?week=${ymd(w)}${p !== 'me' ? `&persoon=${p}` : ''}`)
@@ -123,17 +132,21 @@ export function Tijd({ status }: { status: Status | null }) {
   }
 
   const all = data ?? []
+  const inSprint = (e: TimeEntry) => !!sprint && `${e.date}T${e.start}` >= sprintStart(sprint) && `${e.date}T${e.start}` < sprintEnd(sprint)
+  // Entries the totals are based on: the whole sprint, or this week when no sprint is set.
+  const totalsBase = sprint ? (sprintData.data ?? []).filter(inSprint) : all
   const me = members.data?.find((m) => m.isMe)
   const meKeyOf = () => (me ? String(me.id) : null)
   // Everyone to pick from: team members from GitLab plus anyone else found in the entries.
   const people: { key: string; label: string }[] = (members.data ?? []).map((m) => ({ key: String(m.id), label: m.isMe ? `${m.name} (ik)` : m.name }))
-  for (const e of all) {
+  for (const e of [...all, ...totalsBase]) {
     const k = personKey(e)
     if (!people.some((p) => p.key === k)) people.push({ key: k, label: e.personName ?? `Onbekend (userId ${e.userId})` })
   }
-  // Only offer people who logged time in this week (you and the current choice always stay).
-  const pickerPeople = people.filter((p) => all.some((e) => personKey(e) === p.key) || p.key === meKeyOf() || p.key === person)
-  const minutesOf = (key: string) => all.filter((e) => (key === 'all' ? true : personKey(e) === key)).reduce((s, e) => s + e.durationMinutes, 0)
+  // Only offer people who logged time (in this sprint, or this week without a sprint). You and the current choice always stay.
+  const pickerPeople = people.filter((p) => totalsBase.some((e) => personKey(e) === p.key) || all.some((e) => personKey(e) === p.key) || p.key === meKeyOf() || p.key === person)
+  const isShown = (e: TimeEntry, key: string) => (key === 'all' ? true : key === 'me' ? e.mine : personKey(e) === key)
+  const minutesOf = (key: string) => totalsBase.filter((e) => isShown(e, key === meKeyOf() ? 'me' : key)).reduce((s, e) => s + e.durationMinutes, 0)
   const meKey = me ? String(me.id) : null
   const selectedKey = person === 'me' ? meKey : person
   const entries = all.filter((e) => (person === 'all' ? true : person === 'me' ? e.mine : personKey(e) === person))
@@ -153,7 +166,7 @@ export function Tijd({ status }: { status: Status | null }) {
   const firstHour = Math.min(8, ...starts.map((m) => Math.floor(m / 60)))
   const lastHour = Math.max(18, ...ends.map((m) => Math.ceil(m / 60)))
   const hours = Array.from({ length: lastHour - firstHour }, (_, i) => firstHour + i)
-  const weekTotal = entries.reduce((s, e) => s + e.durationMinutes, 0)
+  const total = minutesOf(person)
   const end = addDays(week, 6)
   const title = week.getMonth() === end.getMonth()
     ? `${week.getDate()}–${end.getDate()} ${MONTHS[end.getMonth()]} ${end.getFullYear()}`
@@ -164,7 +177,13 @@ export function Tijd({ status }: { status: Status | null }) {
       <header className="view-head">
         <div>
           <h1>Tijd</h1>
-          <p className="muted">Week {isoWeek(week)} · {title} · <strong>{duration(weekTotal)}</strong> gelogd door {shownName}</p>
+          <p className="muted">Week {isoWeek(week)} · {title}</p>
+          <p className="muted">
+            {sprint ? <>{sprint.name}: </> : <>Deze week: </>}
+            <strong>{sprint && sprintData.loading ? '…' : duration(total)}</strong>
+            {sprint && person !== 'all' && <> van {sprintHoursTarget} uur</>} gelogd door {shownName}
+            {!sprint && <> · <a href="#/instellingen">stel sprints in</a> om per sprint te tellen</>}
+          </p>
         </div>
         <div className="head-actions">
           <button className="btn" onClick={() => setWeek(addDays(week, -7))} aria-label="Vorige week">←</button>

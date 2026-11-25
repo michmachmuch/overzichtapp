@@ -33,7 +33,18 @@ export function defaultData(): LocalData {
       },
     ],
     deadlines: [],
+    sprints: [],
+    sprintHoursTarget: 64,
     todos: [],
+  }
+}
+
+/** Fills in fields added in later versions, so older data files keep working. */
+export function migrate(d: LocalData): LocalData {
+  return {
+    ...d,
+    sprints: Array.isArray(d.sprints) ? d.sprints : [],
+    sprintHoursTarget: typeof d.sprintHoursTarget === 'number' && d.sprintHoursTarget > 0 ? d.sprintHoursTarget : 64,
   }
 }
 
@@ -57,7 +68,7 @@ export class Store {
     if (this.cache) return this.cache
     try {
       const parsed = JSON.parse(await readFile(this.file, 'utf8'))
-      this.cache = isLocalData(parsed) ? parsed : defaultData()
+      this.cache = isLocalData(parsed) ? migrate(parsed) : defaultData()
     } catch {
       this.cache = defaultData()
       await this.write(this.cache)

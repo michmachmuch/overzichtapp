@@ -96,11 +96,27 @@ export interface Todo {
   doneAt: string | null
 }
 
+export interface Sprint {
+  id: string
+  name: string
+  /** YYYY-MM-DD, first day of the sprint */
+  start: string
+  /** Optional HH:MM the sprint starts on its first day ('' = start of the day) */
+  startTime?: string
+  /** YYYY-MM-DD, last day of the sprint (inclusive) */
+  end: string
+  /** Optional HH:MM the sprint ends on its last day ('' = end of the day) */
+  endTime?: string
+}
+
 export interface LocalData {
   version: 1
   checkins: Checkin[]
   deadlines: Deadline[]
   todos: Todo[]
+  sprints: Sprint[]
+  /** Hours you have to log per sprint. */
+  sprintHoursTarget: number
 }
 
 /** A check-in plus what is new since you last checked it. */
