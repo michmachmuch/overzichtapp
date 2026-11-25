@@ -45,7 +45,7 @@ function Diagnose({ from, to, hiddenByFilter }: { from: string; to: string; hidd
     <section className="panel diagnose">
       <h2>Geen uren te zien?</h2>
       {hiddenByFilter > 0 && (
-        <p className="warn small">Er zijn {hiddenByFilter} registraties die niet als "van jou" herkend worden. Zet "Alleen mijn uren" uit om ze te zien.</p>
+        <p className="warn small">Er zijn {hiddenByFilter} registraties die niet als "van jou" herkend worden. Kies "Iedereen" bij "Uren van" om ze te zien.</p>
       )}
       {!diag && <button className="btn" onClick={run} disabled={busy}>{busy ? 'Bezig…' : 'Zoek uit waarom'}</button>}
       {err && <p className="error small">{err}</p>}
@@ -88,23 +88,61 @@ function Diagnose({ from, to, hiddenByFilter }: { from: string; to: string; hidd
   )
 }
 
+/** Person filter: 'me' (default), a GitLab user id, 'u<userId>' for an unknown tijdregistratie id, or 'all'. */
+function readPerson(): string {
+  return window.location.hash.match(/persoon=([\w-]+)/)?.[1] ?? 'me'
+}
+
+/** Categorical colours in a fixed order; people past the eighth fold into grey. */
+const PERSON_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)', 'var(--series-7)', 'var(--series-8)']
+
+const personKey = (e: TimeEntry) => (e.personId !== null ? String(e.personId) : `u${e.userId}`)
+
 export function Tijd({ status }: { status: Status | null }) {
   const [week, setWeekState] = useState(readWeek)
-  const [onlyMine, setOnlyMine] = useState(true)
+  const [person, setPersonState] = useState(readPerson)
+  const members = useLoad(() => (status?.gitlabConfigured ? api.members() : Promise.resolve([])), [status?.gitlabConfigured])
   const [showWeekend, setShowWeekend] = useState(false)
   const [selected, setSelected] = useState<TimeEntry | null>(null)
   const from = ymd(week)
   const to = ymd(addDays(week, 6))
   const { data, error, loading, reload } = useLoad(() => (status?.gitlabConfigured ? api.time(from, to) : Promise.resolve([])), [from, to, status?.gitlabConfigured])
 
+  const writeHash = (w: Date, p: string) =>
+    window.history.replaceState(null, '', `#/tijd?week=${ymd(w)}${p !== 'me' ? `&persoon=${p}` : ''}`)
   const setWeek = (d: Date) => {
     const w = startOfWeek(d)
     setWeekState(w)
     setSelected(null)
-    window.history.replaceState(null, '', `#/tijd?week=${ymd(w)}`)
+    writeHash(w, person)
+  }
+  const setPerson = (p: string) => {
+    setPersonState(p)
+    setSelected(null)
+    writeHash(week, p)
   }
 
-  const entries = (data ?? []).filter((e) => !onlyMine || e.mine)
+  const all = data ?? []
+  const me = members.data?.find((m) => m.isMe)
+  const meKeyOf = () => (me ? String(me.id) : null)
+  // Everyone to pick from: team members from GitLab plus anyone else found in the entries.
+  const people: { key: string; label: string }[] = (members.data ?? []).map((m) => ({ key: String(m.id), label: m.isMe ? `${m.name} (ik)` : m.name }))
+  for (const e of all) {
+    const k = personKey(e)
+    if (!people.some((p) => p.key === k)) people.push({ key: k, label: e.personName ?? `Onbekend (userId ${e.userId})` })
+  }
+  // Only offer people who logged time in this week (you and the current choice always stay).
+  const pickerPeople = people.filter((p) => all.some((e) => personKey(e) === p.key) || p.key === meKeyOf() || p.key === person)
+  const minutesOf = (key: string) => all.filter((e) => (key === 'all' ? true : personKey(e) === key)).reduce((s, e) => s + e.durationMinutes, 0)
+  const meKey = me ? String(me.id) : null
+  const selectedKey = person === 'me' ? meKey : person
+  const entries = all.filter((e) => (person === 'all' ? true : person === 'me' ? e.mine : personKey(e) === person))
+  const colorOf = (e: TimeEntry) => {
+    if (person !== 'all') return 'var(--series-1)'
+    const i = people.findIndex((p) => p.key === personKey(e))
+    return i >= 0 && i < PERSON_COLORS.length ? PERSON_COLORS[i] : 'var(--muted)'
+  }
+  const shownName = person === 'all' ? 'het hele team' : person === 'me' ? 'jou' : people.find((p) => p.key === person)?.label ?? 'deze persoon'
   const hasWeekend = entries.some((e) => [5, 6].includes((parseYmd(e.date).getDay() + 6) % 7))
   const dayCount = showWeekend || hasWeekend ? 7 : 5
   const days = Array.from({ length: dayCount }, (_, i) => addDays(week, i))
@@ -126,7 +164,7 @@ export function Tijd({ status }: { status: Status | null }) {
       <header className="view-head">
         <div>
           <h1>Tijd</h1>
-          <p className="muted">Week {isoWeek(week)} · {title} · <strong>{duration(weekTotal)}</strong> gelogd</p>
+          <p className="muted">Week {isoWeek(week)} · {title} · <strong>{duration(weekTotal)}</strong> gelogd door {shownName}</p>
         </div>
         <div className="head-actions">
           <button className="btn" onClick={() => setWeek(addDays(week, -7))} aria-label="Vorige week">←</button>
@@ -136,7 +174,14 @@ export function Tijd({ status }: { status: Status | null }) {
         </div>
       </header>
       <div className="filters">
-        <label className="check"><input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} /> Alleen mijn uren</label>
+        <label className="person-picker">
+          <span className="muted small">Uren van</span>
+          <select value={selectedKey && person === 'me' ? selectedKey : person} onChange={(e) => setPerson(e.target.value === meKey ? 'me' : e.target.value)} aria-label="Teamlid">
+            {pickerPeople.map((p) => <option key={p.key} value={p.key}>{p.label} · {duration(minutesOf(p.key))}</option>)}
+            {pickerPeople.length === 0 && <option value="me">Ik</option>}
+            <option value="all">Iedereen · {duration(minutesOf('all'))}</option>
+          </select>
+        </label>
         <label className="check"><input type="checkbox" checked={showWeekend} onChange={(e) => setShowWeekend(e.target.checked)} /> Weekend tonen</label>
         <span className="muted small">Klik op een blok om de commit in GitLab te openen.</span>
       </div>
@@ -144,6 +189,14 @@ export function Tijd({ status }: { status: Status | null }) {
       {!status?.gitlabConfigured && <p className="panel muted">Koppel GitLab (zie README) om je gelogde uren te zien.</p>}
       {error && <p className="panel error">Uren konden niet geladen worden: {error}</p>}
 
+      {person === 'all' && entries.length > 0 && (
+        <div className="legend" aria-label="Legenda">
+          {people.filter((p) => entries.some((e) => personKey(e) === p.key)).map((p) => {
+            const i = people.indexOf(p)
+            return <span key={p.key}><i className="swatch" style={{ background: i < PERSON_COLORS.length ? PERSON_COLORS[i] : 'var(--muted)' }} />{p.label}</span>
+          })}
+        </div>
+      )}
       <div className="calendar-scroll">
         <div className="calendar" style={{ gridTemplateColumns: `3.2rem repeat(${dayCount}, minmax(120px, 1fr))` }}>
           <div className="cal-corner" />
@@ -176,11 +229,11 @@ export function Tijd({ status }: { status: Status | null }) {
                     <button
                       key={e.id}
                       className={`cal-entry ${selected?.id === e.id ? 'is-selected' : ''}`}
-                      style={{ top, height, left: `calc(${idx * width}% + 2px)`, width: `calc(${width}% - 4px)` }}
-                      title={`${e.start}–${e.end} · ${e.note}${e.issueIid ? ` · #${e.issueIid}` : ''}`}
+                      style={{ top, height, left: `calc(${idx * width}% + 2px)`, width: `calc(${width}% - 4px)`, ['--entry-color' as string]: colorOf(e) }}
+                      title={`${person === 'all' && e.personName ? `${e.personName} · ` : ''}${e.start}–${e.end} · ${e.note}${e.issueIid ? ` · #${e.issueIid}` : ''}`}
                       onClick={() => (e.commit ? window.open(e.commit.url, '_blank', 'noreferrer') : setSelected(e))}
                     >
-                      <span className="cal-entry-time">{e.start}–{e.end}{e.issueIid ? ` · #${e.issueIid}` : ''}{height <= 40 && e.note ? <span className="cal-entry-inline"> · {e.note}</span> : null}</span>
+                      <span className="cal-entry-time">{person === 'all' && <span className="cal-entry-who">{(e.personName ?? '?').split(' ')[0]} · </span>}{e.start}–{e.end}{e.issueIid ? ` · #${e.issueIid}` : ''}{height <= 40 && e.note ? <span className="cal-entry-inline"> · {e.note}</span> : null}</span>
                       {height > 40 && <span className="cal-entry-note">{e.note}</span>}
                     </button>
                   )
@@ -197,11 +250,12 @@ export function Tijd({ status }: { status: Status | null }) {
         <section className="panel">
           <h2>Alle registraties deze week</h2>
           <table className="table">
-            <thead><tr><th>Dag</th><th>Tijd</th><th>Duur</th><th>Notitie</th><th>Issue</th><th>Commit</th></tr></thead>
+            <thead><tr><th>Dag</th>{person === 'all' && <th>Wie</th>}<th>Tijd</th><th>Duur</th><th>Notitie</th><th>Issue</th><th>Commit</th></tr></thead>
             <tbody>
               {entries.map((e) => (
                 <tr key={e.id}>
                   <td>{DAYS_SHORT[(parseYmd(e.date).getDay() + 6) % 7]} {parseYmd(e.date).getDate()}</td>
+                  {person === 'all' && <td>{e.personName ?? `userId ${e.userId}`}</td>}
                   <td>{e.start}–{e.end}</td>
                   <td>{duration(e.durationMinutes)}</td>
                   <td>{e.note}</td>
@@ -214,7 +268,7 @@ export function Tijd({ status }: { status: Status | null }) {
         </section>
       )}
       {status?.gitlabConfigured && !loading && !error && entries.length === 0 && (
-        <Diagnose key={from} from={from} to={to} hiddenByFilter={(data ?? []).length - entries.length} />
+        <Diagnose key={from} from={from} to={to} hiddenByFilter={person === 'me' ? all.length - entries.length : 0} />
       )}
     </div>
   )
