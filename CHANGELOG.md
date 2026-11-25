@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Telefoon
+- Phone layout: navigation as a tab bar at the bottom, full-width buttons and form fields, no zooming in on fields on iPhone
+- Tijd on a phone: pick a day (Ma–Vr) and see that day's calendar; the week's entries as a list instead of a table
+- Can be added to the home screen as an app
+- README: Dutch step-by-step guide for opening the app on your phone via Tailscale (private, not on the internet)
+
 ## v1.0.0 (2026-11-25)
 
 First release of Overzicht, a personal overview app for a school scrum project.
