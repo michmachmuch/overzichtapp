@@ -1,12 +1,21 @@
 import { addDays, parseYmd, ymd } from './format'
 import type { Sprint, TimeEntry } from '../shared/types'
 
-export function currentSprint(sprints: Sprint[], today = ymd(new Date())): Sprint | null {
-  return sprints.find((s) => s.start <= today && today <= s.end) ?? null
+/** Sprint start and end as sortable 'YYYY-MM-DDTHH:MM' strings (end is exclusive). */
+export const sprintStart = (s: Sprint) => `${s.start}T${s.startTime || '00:00'}`
+export const sprintEnd = (s: Sprint) => `${s.end}T${s.endTime || '24:00'}`
+
+/** Local 'YYYY-MM-DDTHH:MM' for a moment. */
+export function stamp(d = new Date()): string {
+  return `${ymd(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export function nextSprint(sprints: Sprint[], today = ymd(new Date())): Sprint | null {
-  return [...sprints].filter((s) => s.start > today).sort((a, b) => a.start.localeCompare(b.start))[0] ?? null
+export function currentSprint(sprints: Sprint[], now = stamp()): Sprint | null {
+  return sprints.find((s) => sprintStart(s) <= now && now < sprintEnd(s)) ?? null
+}
+
+export function nextSprint(sprints: Sprint[], now = stamp()): Sprint | null {
+  return [...sprints].filter((s) => sprintStart(s) > now).sort((a, b) => sprintStart(a).localeCompare(sprintStart(b)))[0] ?? null
 }
 
 /** Monday to Friday between two dates, both inclusive. */
@@ -32,7 +41,12 @@ export interface SprintProgress {
 
 export function sprintProgress(sprint: Sprint, entries: TimeEntry[], targetHours: number, today = ymd(new Date())): SprintProgress {
   const targetMinutes = targetHours * 60
-  const loggedMinutes = entries.filter((e) => e.date >= sprint.start && e.date <= sprint.end).reduce((s, e) => s + e.durationMinutes, 0)
+  // An entry counts when it starts within the sprint, using the sprint's start and end time.
+  const from = sprintStart(sprint)
+  const to = sprintEnd(sprint)
+  const loggedMinutes = entries
+    .filter((e) => { const t = `${e.date}T${e.start ?? '00:00'}`; return t >= from && t < to })
+    .reduce((s, e) => s + e.durationMinutes, 0)
   const workdaysTotal = Math.max(1, workdays(sprint.start, sprint.end))
   const elapsed = workdays(sprint.start, today < sprint.end ? today : sprint.end)
   const expectedMinutes = Math.round((targetMinutes * elapsed) / workdaysTotal)

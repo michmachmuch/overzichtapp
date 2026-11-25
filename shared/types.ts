@@ -101,8 +101,12 @@ export interface Sprint {
   name: string
   /** YYYY-MM-DD, first day of the sprint */
   start: string
+  /** Optional HH:MM the sprint starts on its first day ('' = start of the day) */
+  startTime?: string
   /** YYYY-MM-DD, last day of the sprint (inclusive) */
   end: string
+  /** Optional HH:MM the sprint ends on its last day ('' = end of the day) */
+  endTime?: string
 }
 
 export interface LocalData {

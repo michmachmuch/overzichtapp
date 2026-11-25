@@ -54,7 +54,7 @@ function SprintHours({ status, data }: { status: Status | null; data: LocalData 
         <h2>Sprint-uren</h2>
         <p className="muted small">
           {next
-            ? <>Er loopt nu geen sprint. <strong>{next.name}</strong> begint op {dmy(next.start)}.</>
+            ? <>Er loopt nu geen sprint. <strong>{next.name}</strong> begint op {dmy(next.start)}{next.startTime ? ` om ${next.startTime}` : ''}.</>
             : <>Stel je sprints in bij <a href="#/instellingen">Instellingen</a> om je voortgang naar {data.sprintHoursTarget} uur te zien.</>}
         </p>
       </section>
@@ -69,7 +69,7 @@ function SprintHours({ status, data }: { status: Status | null; data: LocalData 
       <div className="panel-head">
         <div>
           <h2>{sprint.name}</h2>
-          <p className="muted small">{dmy(sprint.start)} t/m {dmy(sprint.end)} · nog {p.workdaysLeft} {p.workdaysLeft === 1 ? 'werkdag' : 'werkdagen'}</p>
+          <p className="muted small">{dmy(sprint.start)}{sprint.startTime ? ` ${sprint.startTime}` : ''} t/m {dmy(sprint.end)}{sprint.endTime ? ` ${sprint.endTime}` : ''} · nog {p.workdaysLeft} {p.workdaysLeft === 1 ? 'werkdag' : 'werkdagen'}</p>
         </div>
         <div className="sprint-hours-num">
           <strong>{hours(p.loggedMinutes)}</strong> / {data.sprintHoursTarget} uur
