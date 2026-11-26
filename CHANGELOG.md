@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1.0 (2026-11-26)
 
 ### Telefoon
 - Phone layout: navigation as a tab bar at the bottom, full-width buttons and form fields, no zooming in on fields on iPhone
