@@ -24,13 +24,16 @@ function demoEntries() {
     ['13:00', 45, 'Code review merge request van teamgenoot', 66],
     ['14:00', 120, 'Unit tests schrijven voor teamindeling', 64],
     ['16:00', 30, 'Brainstormen en verfijnen voorstellen nieuwe functies en epic', 71],
+    ['', 45, 'Leeswerk: documentatie over het scrumproces doorgenomen', null],
+    ['14:30', 60, 'Sprintbegeleiding; voorstellen voor tweede epic en functionaliteiten, feedback van de docent verwerkt in het backlog en de definitie van gereed', 71],
   ] as const
   const out: { path: string; sha: string; author: string; content: object }[] = []
   for (const [pi, person] of TEAM.entries()) for (let d = -7; d < 5; d++) {
     const day = new Date(monday)
     day.setDate(monday.getDate() + d)
     if (day > today || day.getDay() === 0 || day.getDay() === 6) continue
-    const pick = notes.filter((_, i) => (i + d + pi + 10) % 3 !== 0)
+    // The last entry (14:30, long note) only on Wednesdays, to show a crowded day.
+    const pick = notes.filter((_, i) => (i === notes.length - 1 ? (d + 7 + pi) % 7 === 2 : (i + d + pi + 10) % 3 !== 0))
     pick.forEach(([time, mins, note, issue], i) => {
       const date = iso(day)
       const id = `demo-${person.username}-${date}-${i}`
@@ -41,7 +44,7 @@ function demoEntries() {
         content: {
           schemaVersion: 1, id, createdAt: `${date}T${time}:00.000Z`, userId: person.id, projectId: PROJECT.id,
           issueIid: issue, branch: 'develop', processId: 'scrum-proces', processStepId: 'scrum-proces-plannen-sprint',
-          skillId: 'scrum-proces-vaardigheid-kiezen-user-stories', date, durationMinutes: mins, workTime: time, note,
+          skillId: 'scrum-proces-vaardigheid-kiezen-user-stories', date, durationMinutes: mins, ...(time ? { workTime: time } : {}), note,
         },
       })
     })

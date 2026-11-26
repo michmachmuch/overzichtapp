@@ -2,10 +2,16 @@ import { useState } from 'react'
 import { api, useLoad } from '../api'
 import { addDays, dmy, DAYS_SHORT, duration, isoWeek, MONTHS, parseYmd, startOfWeek, toMinutes, ymd } from '../format'
 import type { Sprint, Status, TimeDiagnosis, TimeEntry } from '../../shared/types'
-import { sprintEnd, sprintStart, stamp } from '../sprint'
+import { entryInSprint, sprintEnd, sprintStart, stamp } from '../sprint'
 import { useNarrow } from '../useNarrow'
 
-const HOUR_PX = 48
+const HOUR_PX = 72
+/** Heights in px used to decide how many lines of the note fit in a calendar block. */
+const TIME_LINE_PX = 17
+const NOTE_LINE_PX = 15
+const ENTRY_PAD_PX = 6
+
+const timeRange = (e: TimeEntry) => (e.start ? `${e.start}–${e.end}` : 'zonder tijd')
 
 function readWeek(): Date {
   const m = window.location.hash.match(/week=(\d{4}-\d{2}-\d{2})/)
@@ -20,7 +26,7 @@ function Detail({ e, onClose }: { e: TimeEntry; onClose: () => void }) {
         <button className="icon-btn" onClick={onClose} aria-label="Sluiten">✕</button>
       </div>
       <dl>
-        <dt>Wanneer</dt><dd>{dmy(e.date)}, {e.start}–{e.end} ({duration(e.durationMinutes)})</dd>
+        <dt>Wanneer</dt><dd>{dmy(e.date)}, {e.start ? `${e.start}–${e.end}` : 'zonder starttijd'} ({duration(e.durationMinutes)})</dd>
         {e.issueIid && <><dt>Issue</dt><dd><a href={e.issueUrl ?? '#'} target="_blank" rel="noreferrer">#{e.issueIid}</a></dd></>}
         {e.processStepId && <><dt>Processtap</dt><dd>{e.processStepId}</dd></>}
         {e.skillId && <><dt>Vaardigheid</dt><dd>{e.skillId}</dd></>}
@@ -137,7 +143,8 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
   }
 
   const all = data ?? []
-  const inSprint = (e: TimeEntry) => !!sprint && `${e.date}T${e.start}` >= sprintStart(sprint) && `${e.date}T${e.start}` < sprintEnd(sprint)
+  // Entries without a start time count too, unless they are on a day where the sprint starts or ends at a set time.
+  const inSprint = (e: TimeEntry) => !!sprint && entryInSprint(e, sprint)
   // Entries the totals are based on: the whole sprint, or this week when no sprint is set.
   const totalsBase = sprint ? (sprintData.data ?? []).filter(inSprint) : all
   const me = members.data?.find((m) => m.isMe)
@@ -171,8 +178,10 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
   const days = narrow ? weekDays.filter((d) => ymd(d) === activeDay) : weekDays
   const dayTotal = (key: string) => entries.filter((e) => e.date === key).reduce((s, e) => s + e.durationMinutes, 0)
 
-  const starts = entries.map((e) => toMinutes(e.start))
-  const ends = entries.map((e) => toMinutes(e.end))
+  const timed = entries.filter((e) => e.start && e.end)
+  const untimed = entries.filter((e) => !e.start && days.some((d) => ymd(d) === e.date))
+  const starts = timed.map((e) => toMinutes(e.start!))
+  const ends = timed.map((e) => toMinutes(e.end!))
   const firstHour = Math.min(8, ...starts.map((m) => Math.floor(m / 60)))
   const lastHour = Math.max(18, ...ends.map((m) => Math.ceil(m / 60)))
   const hours = Array.from({ length: lastHour - firstHour }, (_, i) => firstHour + i)
@@ -254,19 +263,45 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
               </div>
             )
           })}
+          {untimed.length > 0 && (
+            <>
+              <div className="cal-untimed-label">zonder tijd</div>
+              {days.map((d) => {
+                const key = ymd(d)
+                return (
+                  <div key={key} className="cal-untimed">
+                    {untimed.filter((e) => e.date === key).map((e) => (
+                      <button
+                        key={e.id}
+                        className="cal-chip"
+                        style={{ ['--entry-color' as string]: colorOf(e) }}
+                        title={`${person === 'all' && e.personName ? `${e.personName} · ` : ''}${duration(e.durationMinutes)} zonder starttijd · ${e.note}${e.issueIid ? ` · #${e.issueIid}` : ''}`}
+                        onClick={() => (e.commit ? window.open(e.commit.url, '_blank', 'noreferrer') : setSelected(e))}
+                      >
+                        <span className="cal-entry-time">{person === 'all' && <span className="cal-entry-who">{(e.personName ?? '?').split(' ')[0]} · </span>}{duration(e.durationMinutes)}{e.issueIid ? ` · #${e.issueIid}` : ''}</span>
+                        {e.note && <span className="cal-entry-inline">{e.note}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )
+              })}
+            </>
+          )}
           <div className="cal-hours" style={{ height: hours.length * HOUR_PX }}>
             {hours.map((h) => <div key={h} className="cal-hour" style={{ height: HOUR_PX }}>{String(h).padStart(2, '0')}:00</div>)}
           </div>
           {days.map((d) => {
             const key = ymd(d)
-            const dayEntries = entries.filter((e) => e.date === key)
+            const dayEntries = timed.filter((e) => e.date === key)
             return (
               <div key={key} className={`cal-day ${key === today ? 'is-today' : ''}`} style={{ height: hours.length * HOUR_PX, backgroundSize: `100% ${HOUR_PX}px` }}>
                 {dayEntries.map((e) => {
-                  const top = ((toMinutes(e.start) - firstHour * 60) / 60) * HOUR_PX
-                  const height = Math.max(18, (e.durationMinutes / 60) * HOUR_PX - 2)
+                  const top = ((toMinutes(e.start!) - firstHour * 60) / 60) * HOUR_PX
+                  const height = Math.max(20, (e.durationMinutes / 60) * HOUR_PX - 2)
+                  // The time line always shows; the note gets only the lines that fit below it.
+                  const noteLines = Math.floor((height - ENTRY_PAD_PX - TIME_LINE_PX) / NOTE_LINE_PX)
                   // Entries that overlap are shown side by side.
-                  const overlapping = dayEntries.filter((o) => toMinutes(o.start) < toMinutes(e.end) && toMinutes(o.end) > toMinutes(e.start))
+                  const overlapping = dayEntries.filter((o) => toMinutes(o.start!) < toMinutes(e.end!) && toMinutes(o.end!) > toMinutes(e.start!))
                   const idx = overlapping.indexOf(e)
                   const width = 100 / overlapping.length
                   return (
@@ -277,8 +312,11 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
                       title={`${person === 'all' && e.personName ? `${e.personName} · ` : ''}${e.start}–${e.end} · ${e.note}${e.issueIid ? ` · #${e.issueIid}` : ''}`}
                       onClick={() => (e.commit ? window.open(e.commit.url, '_blank', 'noreferrer') : setSelected(e))}
                     >
-                      <span className="cal-entry-time">{person === 'all' && <span className="cal-entry-who">{(e.personName ?? '?').split(' ')[0]} · </span>}{e.start}–{e.end}{e.issueIid ? ` · #${e.issueIid}` : ''}{height <= 40 && e.note ? <span className="cal-entry-inline"> · {e.note}</span> : null}</span>
-                      {height > 40 && <span className="cal-entry-note">{e.note}</span>}
+                      <span className="cal-entry-line">
+                        <span className="cal-entry-time">{person === 'all' && <span className="cal-entry-who">{(e.personName ?? '?').split(' ')[0]} · </span>}{e.start}–{e.end}{e.issueIid ? ` · #${e.issueIid}` : ''}</span>
+                        {noteLines < 1 && e.note && <span className="cal-entry-inline">· {e.note}</span>}
+                      </span>
+                      {noteLines >= 1 && e.note && <span className="cal-entry-note" style={{ WebkitLineClamp: noteLines, maxHeight: noteLines * NOTE_LINE_PX }}>{e.note}</span>}
                     </button>
                   )
                 })}
@@ -299,7 +337,7 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
                 <li key={e.id}>
                   <div className="entry-list-head">
                     <strong>{DAYS_SHORT[(parseYmd(e.date).getDay() + 6) % 7]} {parseYmd(e.date).getDate()}</strong>
-                    <span>{e.start}–{e.end}</span>
+                    <span>{timeRange(e)}</span>
                     <span className="muted">{duration(e.durationMinutes)}</span>
                   </div>
                   {person === 'all' && <div className="small muted">{e.personName ?? `userId ${e.userId}`}</div>}
@@ -321,7 +359,7 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
                 <tr key={e.id}>
                   <td>{DAYS_SHORT[(parseYmd(e.date).getDay() + 6) % 7]} {parseYmd(e.date).getDate()}</td>
                   {person === 'all' && <td>{e.personName ?? `userId ${e.userId}`}</td>}
-                  <td>{e.start}–{e.end}</td>
+                  <td>{e.start ? timeRange(e) : <span className="muted">{timeRange(e)}</span>}</td>
                   <td>{duration(e.durationMinutes)}</td>
                   <td>{e.note}</td>
                   <td>{e.issueIid ? <a href={e.issueUrl ?? '#'} target="_blank" rel="noreferrer">#{e.issueIid}</a> : '–'}</td>

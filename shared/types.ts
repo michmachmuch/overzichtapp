@@ -16,16 +16,18 @@ export interface RawTimeEntry {
   /** YYYY-MM-DD, local date */
   date: string
   durationMinutes: number
-  /** HH:MM, local start time */
-  workTime: string
+  /** HH:MM, local start time (may be missing or empty when no start time was entered) */
+  workTime?: string | null
   note?: string
 }
 
 export interface TimeEntry {
   id: string
   date: string
-  start: string
-  end: string
+  /** HH:MM, or null when the entry has no start time */
+  start: string | null
+  /** HH:MM, or null when the entry has no start time */
+  end: string | null
   durationMinutes: number
   note: string
   issueIid: number | null

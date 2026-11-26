@@ -56,7 +56,12 @@ export function monthsBetween(from: string, to: string): string[] {
 function isEntry(e: unknown): e is RawTimeEntry {
   const x = e as RawTimeEntry
   return !!x && typeof x === 'object' && typeof x.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date)
-    && typeof x.workTime === 'string' && /^\d{1,2}:\d{2}$/.test(x.workTime) && typeof x.durationMinutes === 'number'
+    && typeof x.durationMinutes === 'number'
+}
+
+/** Whether an entry has a usable start time (workTime 'HH:MM'). */
+export function hasStart(x: RawTimeEntry): x is RawTimeEntry & { workTime: string } {
+  return typeof x.workTime === 'string' && /^\d{1,2}:\d{2}$/.test(x.workTime)
 }
 
 /** Split text that holds several JSON objects one after another (JSON Lines or just concatenated). */
@@ -108,6 +113,13 @@ export function parseTimeEntry(text: string): RawTimeEntry | null {
   return all.length === 1 ? all[0] : null
 }
 
+/**
+ * Version of the on-disk cache. The blob cache holds *parsed* entries, so bump this whenever parsing changes:
+ * otherwise files that an older version could not read stay cached as empty forever.
+ * v3: entries without a start time (no workTime) are read too.
+ */
+const CACHE_VERSION = 3
+
 export class Service {
   private readonly gl: GitLabClient
   private readonly config: Config
@@ -129,9 +141,10 @@ export class Service {
       // Time entries never change once committed, so keep them across restarts.
       try {
         const saved = JSON.parse(readFileSync(cacheFile, 'utf8')) as { v?: number; blobs: [string, RawTimeEntry[]][]; commits: [string, GLCommit | null][] }
-        if (saved.v !== 2) throw new Error('old cache')
-        for (const [k, v] of saved.blobs) this.blobCache.set(k, v)
-        for (const [k, v] of saved.commits) this.commitCache.set(k, v)
+        // Parsed blobs are only reused when they were parsed by this version; commit lookups stay valid.
+        if (saved.v === CACHE_VERSION) for (const [k, v] of saved.blobs) this.blobCache.set(k, v)
+        if ((saved.v ?? 0) >= 2) for (const [k, v] of saved.commits) this.commitCache.set(k, v)
+        if (saved.v !== CACHE_VERSION) this.cacheDirty = true
       } catch {
         /* no cache yet */
       }
@@ -142,7 +155,7 @@ export class Service {
     if (!this.cacheFile || !this.cacheDirty) return
     this.cacheDirty = false
     try {
-      await writeFile(this.cacheFile, JSON.stringify({ v: 2, blobs: [...this.blobCache], commits: [...this.commitCache] }))
+      await writeFile(this.cacheFile, JSON.stringify({ v: CACHE_VERSION, blobs: [...this.blobCache], commits: [...this.commitCache] }))
     } catch {
       /* cache is optional */
     }
@@ -292,8 +305,8 @@ export class Service {
       entries.push({
         id,
         date: raw.date,
-        start: raw.workTime.padStart(5, '0'),
-        end: addMinutes(raw.workTime, raw.durationMinutes),
+        start: hasStart(raw) ? raw.workTime.padStart(5, '0') : null,
+        end: hasStart(raw) ? addMinutes(raw.workTime, raw.durationMinutes) : null,
         durationMinutes: raw.durationMinutes,
         note: raw.note ?? '',
         issueIid: raw.issueIid ?? null,
@@ -308,7 +321,8 @@ export class Service {
         commit: c ? { sha: c.id, shortSha: c.short_id, url: c.web_url, title: c.title } : null,
       })
     }
-    return entries.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
+    // Entries without a start time come first on their day.
+    return entries.sort((a, b) => (a.date + (a.start ?? '')).localeCompare(b.date + (b.start ?? '')))
   }
 
   /** Explains what the app finds, to help when no hours show up. */

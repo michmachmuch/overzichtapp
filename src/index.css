@@ -202,14 +202,23 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .cal-day { position: relative; border-left: 1px solid var(--border); background-image: linear-gradient(to bottom, var(--border) 1px, transparent 1px); }
 .cal-day.is-today { background-color: color-mix(in srgb, var(--accent-soft) 35%, transparent); }
 .cal-entry {
-  position: absolute; display: flex; flex-direction: column; gap: 0.1rem; overflow: hidden; text-align: left;
-  border: none; border-left: 3px solid var(--entry-color, var(--series-1)); border-radius: 6px; padding: 0.2rem 0.4rem; cursor: pointer;
-  background: color-mix(in srgb, var(--entry-color, var(--series-1)) 16%, var(--surface)); color: var(--text); font-size: 0.75rem; line-height: 1.25;
+  position: absolute; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 0; overflow: hidden; text-align: left;
+  border: none; border-left: 3px solid var(--entry-color, var(--series-1)); border-radius: 6px; padding: 3px 0.4rem; cursor: pointer;
+  background: color-mix(in srgb, var(--entry-color, var(--series-1)) 16%, var(--surface)); color: var(--text); font-size: 0.75rem; line-height: 15px;
 }
-.cal-entry:hover, .cal-entry:focus-visible { background: color-mix(in srgb, var(--entry-color, var(--series-1)) 28%, var(--surface)); outline: none; }
-.cal-entry-time { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cal-entry-inline { font-weight: 400; color: var(--text-2); }
-.cal-entry-note { color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.cal-entry:hover, .cal-entry:focus-visible, .cal-chip:hover, .cal-chip:focus-visible { background: color-mix(in srgb, var(--entry-color, var(--series-1)) 28%, var(--surface)); outline: none; }
+/* The time line never shrinks or wraps, so the time is always visible; the note is cut off instead. */
+.cal-entry-line { display: flex; gap: 0.3rem; align-items: baseline; flex-shrink: 0; min-width: 0; line-height: 17px; }
+.cal-entry-time { font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.cal-entry-inline { font-weight: 400; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cal-entry-note { color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; min-height: 0; flex-shrink: 1; overflow-wrap: anywhere; }
+.cal-untimed-label { font-size: 0.68rem; color: var(--muted); text-align: right; padding: 0.3rem 0.4rem 0.5rem 0; border-bottom: 1px solid var(--border); line-height: 1.2; }
+.cal-untimed { display: grid; gap: 3px; align-content: start; padding: 3px 2px; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); min-width: 0; }
+.cal-chip {
+  display: flex; gap: 0.3rem; align-items: baseline; min-width: 0; overflow: hidden; text-align: left; cursor: pointer;
+  border: 1px dashed color-mix(in srgb, var(--entry-color, var(--series-1)) 60%, transparent); border-left: 3px solid var(--entry-color, var(--series-1));
+  border-radius: 6px; padding: 2px 0.4rem; background: color-mix(in srgb, var(--entry-color, var(--series-1)) 10%, var(--surface)); color: var(--text); font-size: 0.75rem; line-height: 17px;
+}
 .table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 .table th { text-align: left; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); padding: 0.4rem 0.5rem; }
 .table td { border-bottom: 1px solid var(--border); padding: 0.45rem 0.5rem; vertical-align: top; }
@@ -265,7 +274,7 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .day-tab-total { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
 .day-tab.is-today .day-tab-date { color: var(--accent); }
 .day-tab.active { background: var(--accent); border-color: var(--accent); }
-.day-tab.active span { color: #fff; }
+.day-tab.active span, .day-tab.active.is-today .day-tab-date { color: #fff; }
 .calendar.calendar-day { min-width: 0; }
 .entry-list { list-style: none; margin: 0; padding: 0; display: grid; }
 .entry-list li { display: grid; gap: 0.2rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
