@@ -3,7 +3,7 @@ services:
     build: .
     container_name: overzicht
     ports:
-      - "127.0.0.1:8080:8080"   # only reachable from your own laptop
+      - "127.0.0.1:8080:8080"   # only reachable from your own laptop (use "tailscale serve" for your phone, see README)
     env_file: .env
     volumes:
       - overzicht-data:/data    # your check-ins, deadlines and to-do's

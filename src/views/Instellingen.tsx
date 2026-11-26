@@ -105,12 +105,16 @@ export function Instellingen({ status, data, save }: { status: Status | null; da
           setSp({ name: '', start: '', startTime: '', end: '', endTime: '' })
         }}>
           <input value={sp.name} onChange={(e) => setSp({ ...sp, name: e.target.value })} placeholder={`Sprint ${data.sprints.length + 1}`} aria-label="Naam sprint" />
-          <span className="muted small">van</span>
-          <DateInput value={sp.start} onChange={(start) => setSp({ ...sp, start })} label="Startdatum sprint" />
-          <TimeSelect value={sp.startTime} onChange={(startTime) => setSp({ ...sp, startTime })} label="Starttijd sprint (optioneel)" />
-          <span className="muted small">t/m</span>
-          <DateInput value={sp.end} onChange={(end) => setSp({ ...sp, end })} label="Einddatum sprint" />
-          <TimeSelect value={sp.endTime} onChange={(endTime) => setSp({ ...sp, endTime })} label="Eindtijd sprint (optioneel)" />
+          <span className="when">
+            <span className="muted small when-label">van</span>
+            <DateInput value={sp.start} onChange={(start) => setSp({ ...sp, start })} label="Startdatum sprint" />
+            <TimeSelect value={sp.startTime} onChange={(startTime) => setSp({ ...sp, startTime })} label="Starttijd sprint (optioneel)" />
+          </span>
+          <span className="when">
+            <span className="muted small when-label">t/m</span>
+            <DateInput value={sp.end} onChange={(end) => setSp({ ...sp, end })} label="Einddatum sprint" />
+            <TimeSelect value={sp.endTime} onChange={(endTime) => setSp({ ...sp, endTime })} label="Eindtijd sprint (optioneel)" />
+          </span>
           <button className="btn btn-primary" type="submit" disabled={!sp.start || !sp.end || sprintInvalid}>Toevoegen</button>
         </form>
         {sprintInvalid && <p className="error small">Het einde ligt voor het begin van de sprint.</p>}
@@ -146,8 +150,10 @@ export function Instellingen({ status, data, save }: { status: Status | null; da
           setDl({ title: '', date: '', time: '' })
         }}>
           <input value={dl.title} onChange={(e) => setDl({ ...dl, title: e.target.value })} placeholder="Bijv. Sprint review" aria-label="Naam deadline" />
-          <DateInput value={dl.date} onChange={(date) => setDl({ ...dl, date })} label="Datum" />
-          <TimeSelect value={dl.time} onChange={(time) => setDl({ ...dl, time })} label="Tijd (optioneel)" />
+          <span className="when">
+            <DateInput value={dl.date} onChange={(date) => setDl({ ...dl, date })} label="Datum" />
+            <TimeSelect value={dl.time} onChange={(time) => setDl({ ...dl, time })} label="Tijd (optioneel)" />
+          </span>
           <button className="btn btn-primary" type="submit">Toevoegen</button>
         </form>
         <ul className="settings-list">

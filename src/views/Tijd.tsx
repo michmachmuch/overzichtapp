@@ -2,9 +2,16 @@ import { useState } from 'react'
 import { api, useLoad } from '../api'
 import { addDays, dmy, DAYS_SHORT, duration, isoWeek, MONTHS, parseYmd, startOfWeek, toMinutes, ymd } from '../format'
 import type { Sprint, Status, TimeDiagnosis, TimeEntry } from '../../shared/types'
-import { sprintEnd, sprintStart, stamp } from '../sprint'
+import { entryInSprint, sprintEnd, sprintStart, stamp } from '../sprint'
+import { useNarrow } from '../useNarrow'
 
-const HOUR_PX = 48
+const HOUR_PX = 72
+/** Heights in px used to decide how many lines of the note fit in a calendar block. */
+const TIME_LINE_PX = 17
+const NOTE_LINE_PX = 15
+const ENTRY_PAD_PX = 6
+
+const timeRange = (e: TimeEntry) => (e.start ? `${e.start}–${e.end}` : 'zonder tijd')
 
 function readWeek(): Date {
   const m = window.location.hash.match(/week=(\d{4}-\d{2}-\d{2})/)
@@ -19,7 +26,7 @@ function Detail({ e, onClose }: { e: TimeEntry; onClose: () => void }) {
         <button className="icon-btn" onClick={onClose} aria-label="Sluiten">✕</button>
       </div>
       <dl>
-        <dt>Wanneer</dt><dd>{dmy(e.date)}, {e.start}–{e.end} ({duration(e.durationMinutes)})</dd>
+        <dt>Wanneer</dt><dd>{dmy(e.date)}, {e.start ? `${e.start}–${e.end}` : 'zonder starttijd'} ({duration(e.durationMinutes)})</dd>
         {e.issueIid && <><dt>Issue</dt><dd><a href={e.issueUrl ?? '#'} target="_blank" rel="noreferrer">#{e.issueIid}</a></dd></>}
         {e.processStepId && <><dt>Processtap</dt><dd>{e.processStepId}</dd></>}
         {e.skillId && <><dt>Vaardigheid</dt><dd>{e.skillId}</dd></>}
@@ -105,6 +112,9 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
   const members = useLoad(() => (status?.gitlabConfigured ? api.members() : Promise.resolve([])), [status?.gitlabConfigured])
   const [showWeekend, setShowWeekend] = useState(false)
   const [selected, setSelected] = useState<TimeEntry | null>(null)
+  const narrow = useNarrow()
+  // On a phone the calendar shows one day at a time; null = today (or Monday when today is in another week).
+  const [pickedDay, setPickedDay] = useState<string | null>(null)
   const from = ymd(week)
   const to = ymd(addDays(week, 6))
   const { data, error, loading, reload } = useLoad(() => (status?.gitlabConfigured ? api.time(from, to) : Promise.resolve([])), [from, to, status?.gitlabConfigured])
@@ -123,6 +133,7 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
     const w = startOfWeek(d)
     setWeekState(w)
     setSelected(null)
+    setPickedDay(null)
     writeHash(w, person)
   }
   const setPerson = (p: string) => {
@@ -132,7 +143,8 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
   }
 
   const all = data ?? []
-  const inSprint = (e: TimeEntry) => !!sprint && `${e.date}T${e.start}` >= sprintStart(sprint) && `${e.date}T${e.start}` < sprintEnd(sprint)
+  // Entries without a start time count too, unless they are on a day where the sprint starts or ends at a set time.
+  const inSprint = (e: TimeEntry) => !!sprint && entryInSprint(e, sprint)
   // Entries the totals are based on: the whole sprint, or this week when no sprint is set.
   const totalsBase = sprint ? (sprintData.data ?? []).filter(inSprint) : all
   const me = members.data?.find((m) => m.isMe)
@@ -158,11 +170,18 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
   const shownName = person === 'all' ? 'het hele team' : person === 'me' ? 'jou' : people.find((p) => p.key === person)?.label ?? 'deze persoon'
   const hasWeekend = entries.some((e) => [5, 6].includes((parseYmd(e.date).getDay() + 6) % 7))
   const dayCount = showWeekend || hasWeekend ? 7 : 5
-  const days = Array.from({ length: dayCount }, (_, i) => addDays(week, i))
+  const weekDays = Array.from({ length: dayCount }, (_, i) => addDays(week, i))
   const today = ymd(new Date())
+  const activeDay = pickedDay && weekDays.some((d) => ymd(d) === pickedDay)
+    ? pickedDay
+    : weekDays.some((d) => ymd(d) === today) ? today : ymd(week)
+  const days = narrow ? weekDays.filter((d) => ymd(d) === activeDay) : weekDays
+  const dayTotal = (key: string) => entries.filter((e) => e.date === key).reduce((s, e) => s + e.durationMinutes, 0)
 
-  const starts = entries.map((e) => toMinutes(e.start))
-  const ends = entries.map((e) => toMinutes(e.end))
+  const timed = entries.filter((e) => e.start && e.end)
+  const untimed = entries.filter((e) => !e.start && days.some((d) => ymd(d) === e.date))
+  const starts = timed.map((e) => toMinutes(e.start!))
+  const ends = timed.map((e) => toMinutes(e.end!))
   const firstHour = Math.min(8, ...starts.map((m) => Math.floor(m / 60)))
   const lastHour = Math.max(18, ...ends.map((m) => Math.ceil(m / 60)))
   const hours = Array.from({ length: lastHour - firstHour }, (_, i) => firstHour + i)
@@ -202,7 +221,7 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
           </select>
         </label>
         <label className="check"><input type="checkbox" checked={showWeekend} onChange={(e) => setShowWeekend(e.target.checked)} /> Weekend tonen</label>
-        <span className="muted small">Klik op een blok om de commit in GitLab te openen.</span>
+        <span className="muted small">{narrow ? 'Tik' : 'Klik'} op een blok om de commit in GitLab te openen.</span>
       </div>
 
       {!status?.gitlabConfigured && <p className="panel muted">Koppel GitLab (zie README) om je gelogde uren te zien.</p>}
@@ -216,12 +235,27 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
           })}
         </div>
       )}
+      {narrow && (
+        <div className="day-tabs" role="tablist" aria-label="Dag">
+          {weekDays.map((d) => {
+            const key = ymd(d)
+            const t = dayTotal(key)
+            return (
+              <button key={key} role="tab" aria-selected={key === activeDay} className={`day-tab ${key === activeDay ? 'active' : ''} ${key === today ? 'is-today' : ''}`} onClick={() => setPickedDay(key)}>
+                <span className="day-tab-name">{DAYS_SHORT[(d.getDay() + 6) % 7]}</span>
+                <span className="day-tab-date">{d.getDate()}</span>
+                <span className="day-tab-total">{t ? duration(t) : '–'}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
       <div className="calendar-scroll">
-        <div className="calendar" style={{ gridTemplateColumns: `3.2rem repeat(${dayCount}, minmax(120px, 1fr))` }}>
+        <div className={`calendar ${narrow ? 'calendar-day' : ''}`} style={{ gridTemplateColumns: `3.2rem repeat(${days.length}, minmax(${narrow ? 0 : 120}px, 1fr))` }}>
           <div className="cal-corner" />
           {days.map((d) => {
             const key = ymd(d)
-            const total = entries.filter((e) => e.date === key).reduce((s, e) => s + e.durationMinutes, 0)
+            const total = dayTotal(key)
             return (
               <div key={key} className={`cal-dayhead ${key === today ? 'is-today' : ''}`}>
                 <span>{DAYS_SHORT[(d.getDay() + 6) % 7]} {d.getDate()}</span>
@@ -229,19 +263,45 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
               </div>
             )
           })}
+          {untimed.length > 0 && (
+            <>
+              <div className="cal-untimed-label">zonder tijd</div>
+              {days.map((d) => {
+                const key = ymd(d)
+                return (
+                  <div key={key} className="cal-untimed">
+                    {untimed.filter((e) => e.date === key).map((e) => (
+                      <button
+                        key={e.id}
+                        className="cal-chip"
+                        style={{ ['--entry-color' as string]: colorOf(e) }}
+                        title={`${person === 'all' && e.personName ? `${e.personName} · ` : ''}${duration(e.durationMinutes)} zonder starttijd · ${e.note}${e.issueIid ? ` · #${e.issueIid}` : ''}`}
+                        onClick={() => (e.commit ? window.open(e.commit.url, '_blank', 'noreferrer') : setSelected(e))}
+                      >
+                        <span className="cal-entry-time">{person === 'all' && <span className="cal-entry-who">{(e.personName ?? '?').split(' ')[0]} · </span>}{duration(e.durationMinutes)}{e.issueIid ? ` · #${e.issueIid}` : ''}</span>
+                        {e.note && <span className="cal-entry-inline">{e.note}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )
+              })}
+            </>
+          )}
           <div className="cal-hours" style={{ height: hours.length * HOUR_PX }}>
             {hours.map((h) => <div key={h} className="cal-hour" style={{ height: HOUR_PX }}>{String(h).padStart(2, '0')}:00</div>)}
           </div>
           {days.map((d) => {
             const key = ymd(d)
-            const dayEntries = entries.filter((e) => e.date === key)
+            const dayEntries = timed.filter((e) => e.date === key)
             return (
               <div key={key} className={`cal-day ${key === today ? 'is-today' : ''}`} style={{ height: hours.length * HOUR_PX, backgroundSize: `100% ${HOUR_PX}px` }}>
                 {dayEntries.map((e) => {
-                  const top = ((toMinutes(e.start) - firstHour * 60) / 60) * HOUR_PX
-                  const height = Math.max(18, (e.durationMinutes / 60) * HOUR_PX - 2)
+                  const top = ((toMinutes(e.start!) - firstHour * 60) / 60) * HOUR_PX
+                  const height = Math.max(20, (e.durationMinutes / 60) * HOUR_PX - 2)
+                  // The time line always shows; the note gets only the lines that fit below it.
+                  const noteLines = Math.floor((height - ENTRY_PAD_PX - TIME_LINE_PX) / NOTE_LINE_PX)
                   // Entries that overlap are shown side by side.
-                  const overlapping = dayEntries.filter((o) => toMinutes(o.start) < toMinutes(e.end) && toMinutes(o.end) > toMinutes(e.start))
+                  const overlapping = dayEntries.filter((o) => toMinutes(o.start!) < toMinutes(e.end!) && toMinutes(o.end!) > toMinutes(e.start!))
                   const idx = overlapping.indexOf(e)
                   const width = 100 / overlapping.length
                   return (
@@ -252,8 +312,11 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
                       title={`${person === 'all' && e.personName ? `${e.personName} · ` : ''}${e.start}–${e.end} · ${e.note}${e.issueIid ? ` · #${e.issueIid}` : ''}`}
                       onClick={() => (e.commit ? window.open(e.commit.url, '_blank', 'noreferrer') : setSelected(e))}
                     >
-                      <span className="cal-entry-time">{person === 'all' && <span className="cal-entry-who">{(e.personName ?? '?').split(' ')[0]} · </span>}{e.start}–{e.end}{e.issueIid ? ` · #${e.issueIid}` : ''}{height <= 40 && e.note ? <span className="cal-entry-inline"> · {e.note}</span> : null}</span>
-                      {height > 40 && <span className="cal-entry-note">{e.note}</span>}
+                      <span className="cal-entry-line">
+                        <span className="cal-entry-time">{person === 'all' && <span className="cal-entry-who">{(e.personName ?? '?').split(' ')[0]} · </span>}{e.start}–{e.end}{e.issueIid ? ` · #${e.issueIid}` : ''}</span>
+                        {noteLines < 1 && e.note && <span className="cal-entry-inline">· {e.note}</span>}
+                      </span>
+                      {noteLines >= 1 && e.note && <span className="cal-entry-note" style={{ WebkitLineClamp: noteLines, maxHeight: noteLines * NOTE_LINE_PX }}>{e.note}</span>}
                     </button>
                   )
                 })}
@@ -268,6 +331,27 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
       {entries.length > 0 && (
         <section className="panel">
           <h2>Alle registraties deze week</h2>
+          {narrow ? (
+            <ul className="entry-list">
+              {entries.map((e) => (
+                <li key={e.id}>
+                  <div className="entry-list-head">
+                    <strong>{DAYS_SHORT[(parseYmd(e.date).getDay() + 6) % 7]} {parseYmd(e.date).getDate()}</strong>
+                    <span>{timeRange(e)}</span>
+                    <span className="muted">{duration(e.durationMinutes)}</span>
+                  </div>
+                  {person === 'all' && <div className="small muted">{e.personName ?? `userId ${e.userId}`}</div>}
+                  {e.note && <div>{e.note}</div>}
+                  {(e.issueIid || e.commit) && (
+                    <div className="entry-list-links small">
+                      {e.issueIid && <a href={e.issueUrl ?? '#'} target="_blank" rel="noreferrer">Issue #{e.issueIid}</a>}
+                      {e.commit && <a className="mono" href={e.commit.url} target="_blank" rel="noreferrer">Commit {e.commit.shortSha} ↗</a>}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
           <table className="table">
             <thead><tr><th>Dag</th>{person === 'all' && <th>Wie</th>}<th>Tijd</th><th>Duur</th><th>Notitie</th><th>Issue</th><th>Commit</th></tr></thead>
             <tbody>
@@ -275,7 +359,7 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
                 <tr key={e.id}>
                   <td>{DAYS_SHORT[(parseYmd(e.date).getDay() + 6) % 7]} {parseYmd(e.date).getDate()}</td>
                   {person === 'all' && <td>{e.personName ?? `userId ${e.userId}`}</td>}
-                  <td>{e.start}–{e.end}</td>
+                  <td>{e.start ? timeRange(e) : <span className="muted">{timeRange(e)}</span>}</td>
                   <td>{duration(e.durationMinutes)}</td>
                   <td>{e.note}</td>
                   <td>{e.issueIid ? <a href={e.issueUrl ?? '#'} target="_blank" rel="noreferrer">#{e.issueIid}</a> : '–'}</td>
@@ -284,6 +368,7 @@ export function Tijd({ status, sprints, sprintHoursTarget }: { status: Status | 
               ))}
             </tbody>
           </table>
+          )}
         </section>
       )}
       {status?.gitlabConfigured && !loading && !error && entries.length === 0 && (

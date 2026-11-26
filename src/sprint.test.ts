@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { currentSprint, sprintProgress, workdays } from './sprint'
+import { currentSprint, entryInSprint, sprintProgress, workdays } from './sprint'
 import type { TimeEntry } from '../shared/types'
 
 const sprint = { id: 's', name: 'Sprint 3', start: '2026-11-23', end: '2026-12-04' } // 2 weeks, 10 workdays
-const entry = (date: string, minutes: number, start = '09:00') => ({ date, start, durationMinutes: minutes } as TimeEntry)
+const entry = (date: string, minutes: number, start: string | null = '09:00') => ({ date, start, durationMinutes: minutes } as TimeEntry)
 
 describe('sprint progress', () => {
   it('counts workdays', () => {
@@ -35,5 +35,19 @@ describe('sprint progress', () => {
     const midday = { ...sprint, startTime: '13:00', endTime: '12:00' }
     const p = sprintProgress(midday, [entry('2026-11-23', 60, '10:00'), entry('2026-11-23', 90, '14:00'), entry('2026-12-04', 30, '13:00')], 64, '2026-11-25')
     expect(p.loggedMinutes).toBe(90)
+  })
+  it('counts entries without a start time only on days fully inside the sprint', () => {
+    expect(entryInSprint(entry('2026-11-25', 60, null), sprint)).toBe(true)
+    // first and last day of a sprint without set times are whole days of the sprint
+    expect(entryInSprint(entry('2026-11-23', 60, null), sprint)).toBe(true)
+    expect(entryInSprint(entry('2026-12-04', 60, null), sprint)).toBe(true)
+    expect(entryInSprint(entry('2026-12-05', 60, null), sprint)).toBe(false)
+    // a switch day (sprint starts or ends at a set time) is unclear, so it does not count
+    const midday = { ...sprint, startTime: '13:00', endTime: '12:00' }
+    expect(entryInSprint(entry('2026-11-23', 60, null), midday)).toBe(false)
+    expect(entryInSprint(entry('2026-12-04', 60, null), midday)).toBe(false)
+    expect(entryInSprint(entry('2026-11-24', 60, null), midday)).toBe(true)
+    const p = sprintProgress(midday, [entry('2026-11-24', 45, null), entry('2026-11-23', 30, null), entry('2026-11-24', 60)], 64, '2026-11-25')
+    expect(p.loggedMinutes).toBe(105)
   })
 })

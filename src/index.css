@@ -202,14 +202,23 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .cal-day { position: relative; border-left: 1px solid var(--border); background-image: linear-gradient(to bottom, var(--border) 1px, transparent 1px); }
 .cal-day.is-today { background-color: color-mix(in srgb, var(--accent-soft) 35%, transparent); }
 .cal-entry {
-  position: absolute; display: flex; flex-direction: column; gap: 0.1rem; overflow: hidden; text-align: left;
-  border: none; border-left: 3px solid var(--entry-color, var(--series-1)); border-radius: 6px; padding: 0.2rem 0.4rem; cursor: pointer;
-  background: color-mix(in srgb, var(--entry-color, var(--series-1)) 16%, var(--surface)); color: var(--text); font-size: 0.75rem; line-height: 1.25;
+  position: absolute; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 0; overflow: hidden; text-align: left;
+  border: none; border-left: 3px solid var(--entry-color, var(--series-1)); border-radius: 6px; padding: 3px 0.4rem; cursor: pointer;
+  background: color-mix(in srgb, var(--entry-color, var(--series-1)) 16%, var(--surface)); color: var(--text); font-size: 0.75rem; line-height: 15px;
 }
-.cal-entry:hover, .cal-entry:focus-visible { background: color-mix(in srgb, var(--entry-color, var(--series-1)) 28%, var(--surface)); outline: none; }
-.cal-entry-time { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cal-entry-inline { font-weight: 400; color: var(--text-2); }
-.cal-entry-note { color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.cal-entry:hover, .cal-entry:focus-visible, .cal-chip:hover, .cal-chip:focus-visible { background: color-mix(in srgb, var(--entry-color, var(--series-1)) 28%, var(--surface)); outline: none; }
+/* The time line never shrinks or wraps, so the time is always visible; the note is cut off instead. */
+.cal-entry-line { display: flex; gap: 0.3rem; align-items: baseline; flex-shrink: 0; min-width: 0; line-height: 17px; }
+.cal-entry-time { font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.cal-entry-inline { font-weight: 400; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cal-entry-note { color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; min-height: 0; flex-shrink: 1; overflow-wrap: anywhere; }
+.cal-untimed-label { font-size: 0.68rem; color: var(--muted); text-align: right; padding: 0.3rem 0.4rem 0.5rem 0; border-bottom: 1px solid var(--border); line-height: 1.2; }
+.cal-untimed { display: grid; gap: 3px; align-content: start; padding: 3px 2px; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); min-width: 0; }
+.cal-chip {
+  display: flex; gap: 0.3rem; align-items: baseline; min-width: 0; overflow: hidden; text-align: left; cursor: pointer;
+  border: 1px dashed color-mix(in srgb, var(--entry-color, var(--series-1)) 60%, transparent); border-left: 3px solid var(--entry-color, var(--series-1));
+  border-radius: 6px; padding: 2px 0.4rem; background: color-mix(in srgb, var(--entry-color, var(--series-1)) 10%, var(--surface)); color: var(--text); font-size: 0.75rem; line-height: 17px;
+}
 .table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 .table th { text-align: left; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); padding: 0.4rem 0.5rem; }
 .table td { border-bottom: 1px solid var(--border); padding: 0.45rem 0.5rem; vertical-align: top; }
@@ -224,12 +233,6 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .modal { background: var(--surface); border-radius: 14px; width: min(560px, 100%); max-height: calc(100vh - 2rem); overflow: auto; padding: 1.25rem 1.4rem; box-shadow: 0 10px 40px rgb(0 0 0 / 0.25); }
 .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
 
-@media (max-width: 700px) {
-  .topnav { gap: 0.5rem; padding: 0.5rem 0.75rem; flex-wrap: wrap; }
-  nav a { padding: 0.4rem 0.55rem; }
-  .view { padding: 1rem 1rem 3rem; }
-  .table th:nth-child(5), .table td:nth-child(5) { display: none; }
-}
 
 .diagnose ul { margin: 0.3rem 0 0.6rem; padding-left: 1.1rem; display: grid; gap: 0.2rem; }
 .diagnose p { margin: 0.4rem 0; }
@@ -258,3 +261,79 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem; color: var(--text-2); }
 .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
 .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+
+/* Phone-only pieces (hidden on wide screens) */
+.when { display: inline-flex; align-items: center; gap: 0.4rem; }
+.day-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0.3rem; }
+.day-tab {
+  display: grid; justify-items: center; gap: 0.05rem; padding: 0.4rem 0.2rem; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-2);
+}
+.day-tab-name { font-size: 0.75rem; text-transform: capitalize; }
+.day-tab-date { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.day-tab-total { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+.day-tab.is-today .day-tab-date { color: var(--accent); }
+.day-tab.active { background: var(--accent); border-color: var(--accent); }
+.day-tab.active span, .day-tab.active.is-today .day-tab-date { color: #fff; }
+.calendar.calendar-day { min-width: 0; }
+.entry-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.entry-list li { display: grid; gap: 0.2rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+.entry-list li:last-child { border-bottom: none; }
+.entry-list-head { display: flex; gap: 0.6rem; align-items: baseline; }
+.entry-list-head span:last-child { margin-left: auto; }
+.entry-list-links { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+/* Phone layout: keep the breakpoint in sync with src/useNarrow.ts */
+@media (max-width: 700px) {
+  /* Navigation moves to a tab bar at the bottom, within reach of your thumb. */
+  .topnav { padding: 0.55rem 1rem; padding-top: calc(0.55rem + env(safe-area-inset-top)); gap: 0.5rem; }
+  .topnav nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; gap: 0;
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 0.3rem 0.5rem calc(0.3rem + env(safe-area-inset-bottom));
+  }
+  .topnav nav a { flex-direction: column; gap: 0.1rem; padding: 0.35rem 0.2rem; font-size: 0.75rem; justify-content: center; }
+  .topnav nav a .nav-icon { font-size: 1.15rem; line-height: 1.2; }
+  .layout { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
+  .view { padding: 1rem 1rem 2rem; }
+  h1 { font-size: 1.4rem; }
+  .panel { padding: 0.95rem 1rem; }
+
+  /* 16px stops iOS Safari from zooming in when a field gets focus. */
+  input, select, textarea { font-size: 16px; }
+  .btn, .icon-btn { min-height: 2.5rem; }
+  .icon-btn { min-width: 2.5rem; }
+  .reorder .icon-btn { min-height: 0; min-width: 0; padding: 0.15rem 0.5rem; font-size: 0.7rem; }
+
+  .two-col { grid-template-columns: 1fr; }
+  .head-actions { width: 100%; }
+  .head-actions .btn:not(.btn-ghost) { flex: 1; justify-content: center; }
+  .filters { gap: 0.6rem 1rem; }
+  .person-picker { width: 100%; }
+  .person-picker select { flex: 1; min-width: 0; }
+
+  .inline-form { display: grid; grid-template-columns: 1fr; }
+  .inline-form input:not(.w-auto) { min-width: 0; }
+  .inline-form .btn { justify-content: center; }
+  .when { width: 100%; }
+  .when-label { width: 2rem; }
+  .when .date-input { flex: 1; }
+  .when .date-input input:not(.date-native) { width: 100%; }
+  .time-select select { padding-left: 0.45rem; padding-right: 0.3rem; }
+
+  .checkin { gap: 0.6rem; }
+  .checkin-main { min-width: 0; flex-basis: 100%; }
+  .checkin-actions { width: 100%; }
+  .checkin-actions .btn { flex: 1; justify-content: center; }
+  .settings-list li { flex-wrap: wrap; }
+  .settings-list li .grow { flex-basis: 0; }
+  .time-today .grow { min-width: 0; flex-basis: 100%; }
+  .stat-value { font-size: 1.6rem; }
+  .countdowns { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+  .countdown { padding: 0.65rem 0.75rem; }
+  .countdown-num { font-size: 1.25rem; }
+  .modal-backdrop { place-items: end center; padding: 0; }
+  .modal { width: 100%; border-radius: 14px 14px 0 0; max-height: 92vh; padding-bottom: calc(1.25rem + env(safe-area-inset-bottom)); }
+  .form-actions .btn { flex: 1; justify-content: center; }
+}

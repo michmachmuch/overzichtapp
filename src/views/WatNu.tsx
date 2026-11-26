@@ -116,7 +116,7 @@ function TodayTime({ status }: { status: Status | null }) {
   const total = todays.reduce((s, e) => s + e.durationMinutes, 0)
   const last = mine.at(-1)
   let gap: string | null = null
-  if (last && last.date === today) {
+  if (last && last.date === today && last.end) {
     const now = new Date()
     const mins = now.getHours() * 60 + now.getMinutes() - toMinutes(last.end)
     if (mins > 15) gap = duration(mins)
@@ -134,7 +134,7 @@ function TodayTime({ status }: { status: Status | null }) {
               Laatste activiteit: <strong>{last.note || 'zonder notitie'}</strong>
             </div>
             <div className="muted small">
-              {last.date === today ? 'vandaag' : longDate(parseYmd(last.date))} {last.start}–{last.end}
+              {last.date === today ? 'vandaag' : longDate(parseYmd(last.date))} {last.start ? `${last.start}–${last.end}` : `${duration(last.durationMinutes)}, zonder starttijd`}
               {gap && <> · <span className="warn">sindsdien {gap} niet gelogd</span></>}
             </div>
           </>
