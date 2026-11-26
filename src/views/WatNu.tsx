@@ -322,12 +322,6 @@ function Todos({ data, save }: { data: LocalData; save: (d: LocalData) => void }
               <input type="checkbox" checked={t.done} onChange={() => update(data.todos.map((x) => x.id === t.id ? { ...x, done: !x.done, doneAt: x.done ? null : new Date().toISOString() } : x))} />
               <span>{t.title}</span>
             </label>
-            {!t.done && open.length > 1 && (
-              <span className="reorder">
-                <button type="button" className="icon-btn" disabled={i === 0} onClick={() => saveOrder(moveItem(savedOpen.map((x) => x.id), i, i - 1))} aria-label={`${t.title} omhoog`}>▲</button>
-                <button type="button" className="icon-btn" disabled={i === open.length - 1} onClick={() => saveOrder(moveItem(savedOpen.map((x) => x.id), i, i + 1))} aria-label={`${t.title} omlaag`}>▼</button>
-              </span>
-            )}
             <button className="icon-btn" aria-label={`Verwijder ${t.title}`} onClick={() => update(data.todos.filter((x) => x.id !== t.id))}>✕</button>
           </li>
         ))}
