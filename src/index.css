@@ -181,7 +181,7 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .todo-list li { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border-radius: 8px; }
 .todo-list li:hover { background: var(--surface-2); }
 .todo-list label { flex: 1; display: flex; align-items: center; gap: 0.55rem; cursor: pointer; }
-.todo-list input[type=checkbox] { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); }
+.todo-list input[type=checkbox] { width: 1.05rem; height: 1.05rem; flex-shrink: 0; accent-color: var(--accent); }
 .todo-list li.done span { text-decoration: line-through; color: var(--muted); }
 .drag-handle {
   border: none; background: transparent; color: var(--muted); cursor: grab; padding: 0.2rem 0.15rem; border-radius: 6px;
