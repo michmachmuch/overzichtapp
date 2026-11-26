@@ -11,7 +11,7 @@
 ### Tijd
 - Taller hour rows (72px per hour) so more of each note fits
 - The time of a block is always visible; a long note is cut off with … instead of pushing the time out of view
-- Entries without a start time are now read too: shown in a "zonder tijd" row above the calendar and in the list
+- Entries without a start time are now read too: shown in a "zonder tijd" row above the calendar and in the list; the saved GitLab cache is refreshed once so files that v1.0.0 skipped are read again
 - Entries without a start time count towards the sprint total when their whole day is inside the sprint (not on a day where a sprint starts or ends at a set time)
 
 ## v1.0.0 (2026-11-25)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -106,6 +106,33 @@ describe('Service', () => {
     expect(e).toMatchObject({ date: '2026-11-24', start: '16:00', end: '16:30', issueIid: 71, issueUrl: 'https://g/p/-/issues/71' })
     expect(e.commit?.url).toBe('https://g/p/-/commit/fff')
     expect(paths.some((p) => p.includes('path=.time-tracking%2F2026%2F11') && p.includes('ref=develop'))).toBe(true)
+  })
+
+  it('reads an entry without start time (real format) and ignores blobs cached by an older version', async () => {
+    // Exactly as the tijdregistratie program writes it when no start time is entered: no workTime, issueIid null.
+    const noStart = JSON.stringify({
+      schemaVersion: 1, id: 'ddb10019-96bb-4301-9aea-47e67e759d98', createdAt: '2026-11-23T20:28:55.573Z', userId: 3761, projectId: 7023,
+      issueIid: null, branch: 'develop', catalogVersion: '1.1.1', processId: 'ontwerpproces', processStepId: 'ontwerpproces-opstellen-ontwerp',
+      skillId: 'ontwerpproces-vaardigheid-iteratief-verfijnen-ontwerp', date: '2026-11-20', durationMinutes: 180, note: 'Schermontwerpen in Figma uitgewerkt',
+    }, null, 2)
+    const fake: FetchLike = async (url) => {
+      const u = new URL(url)
+      const ok = (body: unknown) => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) })
+      if (u.pathname.endsWith('/user')) return ok({ id: 3761, username: 'm', name: 'M' })
+      if (u.pathname.endsWith('/repository/tree')) return ok([{ id: 'blob-no-start', name: 'x.json', type: 'blob', path: '.time-tracking/2026/11/x.json' }])
+      if (u.pathname.endsWith('/raw')) return ok(noStart)
+      if (u.pathname.endsWith('/repository/commits')) return ok([{ id: 'f'.repeat(40), short_id: 'ffffffff', title: 't', web_url: 'https://g/p/-/commit/fff', created_at: '' }])
+      return ok({ id: 7023, name: 'P', web_url: 'https://g/p', path_with_namespace: 'p' })
+    }
+    // A cache written by v1.0.0, which could not read this file and stored it as empty.
+    const cacheFile = join(mkdtempSync(join(tmpdir(), 'ov-cache-')), 'gitlab-cache.json')
+    writeFileSync(cacheFile, JSON.stringify({ v: 2, blobs: [['blob-no-start', []]], commits: [] }))
+    const config = { ...loadConfig({}), gitlabProject: 'demo', gitlabToken: 'x' }
+    const service = new Service(config, new GitLabClient('https://gitlab.example', 'x', fake), cacheFile)
+    const entries = await service.timeEntries('2026-11-16', '2026-11-22')
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ date: '2026-11-20', start: null, end: null, durationMinutes: 180, issueIid: null, issueUrl: null, mine: true })
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8')).v).toBe(3)
   })
 
   it('recognises your entries by commit author when the userId differs from your GitLab id', async () => {

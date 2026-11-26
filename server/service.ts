@@ -113,6 +113,13 @@ export function parseTimeEntry(text: string): RawTimeEntry | null {
   return all.length === 1 ? all[0] : null
 }
 
+/**
+ * Version of the on-disk cache. The blob cache holds *parsed* entries, so bump this whenever parsing changes:
+ * otherwise files that an older version could not read stay cached as empty forever.
+ * v3: entries without a start time (no workTime) are read too.
+ */
+const CACHE_VERSION = 3
+
 export class Service {
   private readonly gl: GitLabClient
   private readonly config: Config
@@ -134,9 +141,10 @@ export class Service {
       // Time entries never change once committed, so keep them across restarts.
       try {
         const saved = JSON.parse(readFileSync(cacheFile, 'utf8')) as { v?: number; blobs: [string, RawTimeEntry[]][]; commits: [string, GLCommit | null][] }
-        if (saved.v !== 2) throw new Error('old cache')
-        for (const [k, v] of saved.blobs) this.blobCache.set(k, v)
-        for (const [k, v] of saved.commits) this.commitCache.set(k, v)
+        // Parsed blobs are only reused when they were parsed by this version; commit lookups stay valid.
+        if (saved.v === CACHE_VERSION) for (const [k, v] of saved.blobs) this.blobCache.set(k, v)
+        if ((saved.v ?? 0) >= 2) for (const [k, v] of saved.commits) this.commitCache.set(k, v)
+        if (saved.v !== CACHE_VERSION) this.cacheDirty = true
       } catch {
         /* no cache yet */
       }
@@ -147,7 +155,7 @@ export class Service {
     if (!this.cacheFile || !this.cacheDirty) return
     this.cacheDirty = false
     try {
-      await writeFile(this.cacheFile, JSON.stringify({ v: 2, blobs: [...this.blobCache], commits: [...this.commitCache] }))
+      await writeFile(this.cacheFile, JSON.stringify({ v: CACHE_VERSION, blobs: [...this.blobCache], commits: [...this.commitCache] }))
     } catch {
       /* cache is optional */
     }
