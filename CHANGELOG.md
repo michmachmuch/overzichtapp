@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Wat nu?
+- Reorder your own to-do's by dragging the ⋮⋮ handle (mouse or finger), or focus it and use the arrow keys; the order is saved
+
 ## v1.1.0 (2026-11-26)
 
 ### Telefoon

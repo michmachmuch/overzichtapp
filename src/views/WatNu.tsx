@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, newId, useLoad } from '../api'
 import { addDays, dmy, daysUntil, duration, longDate, parseYmd, relative, toMinutes, ymd } from '../format'
 import type { CheckinStatus, LocalData, Status } from '../../shared/types'
 import { currentSprint, nextSprint, sprintProgress } from '../sprint'
+import { dropIndex, moveItem, reorderOpen } from '../reorder'
 
 interface Props {
   status: Status | null
@@ -229,9 +230,60 @@ function Issues({ status }: { status: Status | null }) {
 function Todos({ data, save }: { data: LocalData; save: (d: LocalData) => void }) {
   const [title, setTitle] = useState('')
   const [showDone, setShowDone] = useState(false)
-  const open = data.todos.filter((t) => !t.done)
+  const savedOpen = data.todos.filter((t) => !t.done)
   const done = data.todos.filter((t) => t.done).sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? ''))
   const update = (todos: LocalData['todos']) => save({ ...data, todos })
+  // While dragging, `preview` holds the open to-do ids in their new order; it is saved when you let go.
+  const [drag, setDragState] = useState<{ id: string; preview: string[] } | null>(null)
+  // The same value, readable right away by pointer events that arrive before React re-renders.
+  const dragRef = useRef<{ id: string; preview: string[] } | null>(null)
+  const setDrag = (d: { id: string; preview: string[] } | null) => { dragRef.current = d; setDragState(d) }
+  const rows = useRef(new Map<string, HTMLLIElement>())
+  const open = drag ? drag.preview.map((id) => savedOpen.find((t) => t.id === id)!).filter(Boolean) : savedOpen
+  const saveOrder = (ids: string[]) => update(reorderOpen(data.todos, ids))
+  const onDragMove = (e: PointerEvent) => {
+    const drag = dragRef.current
+    if (!drag) return
+    // Middles of the other rows, top to bottom, decide where the dragged one goes.
+    const others = drag.preview.filter((id) => id !== drag.id)
+    const middles = others.map((id) => { const r = rows.current.get(id)!.getBoundingClientRect(); return r.top + r.height / 2 })
+    const to = dropIndex(e.clientY, middles)
+    const next = [...others.slice(0, to), drag.id, ...others.slice(to)]
+    if (next.join() !== drag.preview.join()) setDrag({ ...drag, preview: next })
+  }
+  const onDragEnd = () => {
+    const drag = dragRef.current
+    if (!drag) return
+    if (drag.preview.join() !== savedOpen.map((t) => t.id).join()) saveOrder(drag.preview)
+    setDrag(null)
+  }
+  // Follow the pointer on the whole window while dragging: the row moves in the page as you drag,
+  // which would end pointer capture on the handle itself.
+  const handlers = useRef({ move: onDragMove, end: onDragEnd })
+  useEffect(() => { handlers.current = { move: onDragMove, end: onDragEnd } })
+  const dragging = drag !== null
+  useEffect(() => {
+    if (!dragging) return
+    const move = (e: PointerEvent) => handlers.current.move(e)
+    const end = () => handlers.current.end()
+    const cancel = () => setDrag(null)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', cancel)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', cancel)
+    }
+  }, [dragging])
+  const onHandleKey = (e: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const to = e.key === 'ArrowUp' ? index - 1 : e.key === 'ArrowDown' ? index + 1 : null
+    if (to === null || to < 0 || to >= savedOpen.length) return
+    e.preventDefault()
+    saveOrder(moveItem(savedOpen.map((t) => t.id), index, to))
+    const handle = e.currentTarget
+    requestAnimationFrame(() => handle.focus())
+  }
   return (
     <section className="panel">
       <h2>Eigen to-do's</h2>
@@ -246,8 +298,26 @@ function Todos({ data, save }: { data: LocalData; save: (d: LocalData) => void }
       </form>
       {open.length === 0 && <p className="muted small">Geen open to-do's.</p>}
       <ul className="todo-list">
-        {[...open, ...(showDone ? done : [])].map((t) => (
-          <li key={t.id} className={t.done ? 'done' : ''}>
+        {[...open, ...(showDone ? done : [])].map((t, i) => (
+          <li
+            key={t.id}
+            ref={(el) => { if (el) rows.current.set(t.id, el); else rows.current.delete(t.id) }}
+            className={`${t.done ? 'done' : ''} ${drag?.id === t.id ? 'dragging' : ''}`}
+          >
+            {!t.done && open.length > 1 && (
+              <button
+                type="button"
+                className="drag-handle"
+                aria-label={`Verplaats ${t.title} (pijltjestoetsen omhoog/omlaag)`}
+                title="Sleep om de volgorde te veranderen"
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return
+                  e.preventDefault()
+                  setDrag({ id: t.id, preview: savedOpen.map((x) => x.id) })
+                }}
+                onKeyDown={(e) => onHandleKey(e, i)}
+              >⋮⋮</button>
+            )}
             <label>
               <input type="checkbox" checked={t.done} onChange={() => update(data.todos.map((x) => x.id === t.id ? { ...x, done: !x.done, doneAt: x.done ? null : new Date().toISOString() } : x))} />
               <span>{t.title}</span>

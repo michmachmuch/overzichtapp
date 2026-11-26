@@ -183,6 +183,13 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .todo-list label { flex: 1; display: flex; align-items: center; gap: 0.55rem; cursor: pointer; }
 .todo-list input[type=checkbox] { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); }
 .todo-list li.done span { text-decoration: line-through; color: var(--muted); }
+.drag-handle {
+  border: none; background: transparent; color: var(--muted); cursor: grab; padding: 0.2rem 0.15rem; border-radius: 6px;
+  font-size: 0.85rem; letter-spacing: -0.2em; line-height: 1; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.drag-handle:hover, .drag-handle:focus-visible { color: var(--text); background: var(--surface-2); outline: none; }
+.todo-list li.dragging { background: var(--accent-soft); box-shadow: var(--shadow); }
+.todo-list li.dragging .drag-handle { cursor: grabbing; color: var(--accent); }
 .settings-list li { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; }
 .reorder { display: flex; flex-direction: column; }
 .reorder .icon-btn { font-size: 0.55rem; padding: 0 0.25rem; line-height: 1.2; }
@@ -304,6 +311,7 @@ dd { margin: 0; overflow-wrap: anywhere; }
   input, select, textarea { font-size: 16px; }
   .btn, .icon-btn { min-height: 2.5rem; }
   .icon-btn { min-width: 2.5rem; }
+  .drag-handle { min-height: 2.5rem; min-width: 2rem; font-size: 1rem; }
   .reorder .icon-btn { min-height: 0; min-width: 0; padding: 0.15rem 0.5rem; font-size: 0.7rem; }
 
   .two-col { grid-template-columns: 1fr; }
