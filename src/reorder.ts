@@ -25,3 +25,30 @@ export function dropIndex(pointerY: number, middles: readonly number[]): number 
   const i = middles.findIndex((m) => pointerY < m)
   return i === -1 ? middles.length : i
 }
+
+/** Where a row sits on screen when a drag starts. */
+export interface RowBox { top: number; bottom: number }
+
+/** Index the dragged row (originally at `start`) would land on, given its current vertical middle. */
+export function dragTarget(start: number, middleY: number, rows: readonly RowBox[]): number {
+  const middles = rows.filter((_, i) => i !== start).map((r) => (r.top + r.bottom) / 2)
+  return dropIndex(middleY, middles)
+}
+
+/** How far (px) another row slides aside while the row from `start` hovers at `target`. */
+export function rowShift(i: number, start: number, target: number, rows: readonly RowBox[]): number {
+  if (i === start || rows.length < 2) return 0
+  // The space the dragged row takes up, including the gap to its neighbour.
+  const gap = rows.length > 1 ? rows[1].top - rows[0].bottom : 0
+  const size = rows[start].bottom - rows[start].top + gap
+  if (start < i && i <= target) return -size
+  if (target <= i && i < start) return size
+  return 0
+}
+
+/** How far (px) the dragged row has to move from where it started to sit in slot `target`. */
+export function slotOffset(start: number, target: number, rows: readonly RowBox[]): number {
+  if (target > start) return rows[target].bottom - rows[start].bottom
+  if (target < start) return rows[target].top - rows[start].top
+  return 0
+}

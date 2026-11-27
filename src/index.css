@@ -188,7 +188,15 @@ dd { margin: 0; overflow-wrap: anywhere; }
   font-size: 0.85rem; letter-spacing: -0.2em; line-height: 1; touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .drag-handle:hover, .drag-handle:focus-visible { color: var(--text); background: var(--surface-2); outline: none; }
-.todo-list li.dragging { background: var(--accent-soft); box-shadow: var(--shadow); }
+.todo-list li { position: relative; }
+/* While dragging, the other rows glide aside; the held row follows the pointer without delay. */
+.todo-list.is-dragging li { transition: transform 150ms ease; user-select: none; -webkit-user-select: none; }
+.todo-list.is-dragging li.dragging { transition: none; z-index: 5; background: var(--surface); box-shadow: 0 6px 20px rgb(0 0 0 / 0.18); outline: 2px solid var(--accent); outline-offset: -2px; }
+.todo-list.is-dragging li.dragging.outside { opacity: 0.7; outline-style: dashed; }
+.todo-list.is-dragging li.dragging.settling { transition: transform 180ms ease; }
+.todo-list.is-dragging li:hover { background: transparent; }
+.todo-list.is-dragging li.dragging:hover { background: var(--surface); }
+@media (prefers-reduced-motion: reduce) { .todo-list.is-dragging li, .todo-list.is-dragging li.dragging.settling { transition: none; } }
 .todo-list li.dragging .drag-handle { cursor: grabbing; color: var(--accent); }
 .settings-list li { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; }
 .reorder { display: flex; flex-direction: column; }

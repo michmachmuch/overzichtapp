@@ -3,7 +3,7 @@ import { api, newId, useLoad } from '../api'
 import { addDays, dmy, daysUntil, duration, longDate, parseYmd, relative, toMinutes, ymd } from '../format'
 import type { CheckinStatus, LocalData, Status } from '../../shared/types'
 import { currentSprint, nextSprint, sprintProgress } from '../sprint'
-import { dropIndex, moveItem, reorderOpen } from '../reorder'
+import { dragTarget, moveItem, reorderOpen, rowShift, slotOffset, type RowBox } from '../reorder'
 
 interface Props {
   status: Status | null
@@ -233,49 +233,85 @@ function Todos({ data, save }: { data: LocalData; save: (d: LocalData) => void }
   const savedOpen = data.todos.filter((t) => !t.done)
   const done = data.todos.filter((t) => t.done).sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? ''))
   const update = (todos: LocalData['todos']) => save({ ...data, todos })
-  // While dragging, `preview` holds the open to-do ids in their new order; it is saved when you let go.
-  const [drag, setDragState] = useState<{ id: string; preview: string[] } | null>(null)
+  // Dragging: the row you hold follows the pointer, the rows in between slide aside, and it settles where you let go.
+  // Let go outside the to-do box and it flies back. The row order only changes (and is saved) once it has settled.
+  type Drag = {
+    id: string; start: number; dx: number; dy: number; target: number; outside: boolean; settling: boolean
+    /** Positions of the open rows and of the pointer when the drag started. */
+    geo: { rows: RowBox[]; x: number; y: number }
+  }
+  const [drag, setDragState] = useState<Drag | null>(null)
   // The same value, readable right away by pointer events that arrive before React re-renders.
-  const dragRef = useRef<{ id: string; preview: string[] } | null>(null)
-  const setDrag = (d: { id: string; preview: string[] } | null) => { dragRef.current = d; setDragState(d) }
+  const dragRef = useRef<Drag | null>(null)
+  const setDrag = (d: Drag | null) => { dragRef.current = d; setDragState(d) }
   const rows = useRef(new Map<string, HTMLLIElement>())
-  const open = drag ? drag.preview.map((id) => savedOpen.find((t) => t.id === id)!).filter(Boolean) : savedOpen
+  const box = useRef<HTMLElement>(null)
+  const open = savedOpen
   const saveOrder = (ids: string[]) => update(reorderOpen(data.todos, ids))
+  const SETTLE_MS = 180
   const onDragMove = (e: PointerEvent) => {
-    const drag = dragRef.current
-    if (!drag) return
-    // Middles of the other rows, top to bottom, decide where the dragged one goes.
-    const others = drag.preview.filter((id) => id !== drag.id)
-    const middles = others.map((id) => { const r = rows.current.get(id)!.getBoundingClientRect(); return r.top + r.height / 2 })
-    const to = dropIndex(e.clientY, middles)
-    const next = [...others.slice(0, to), drag.id, ...others.slice(to)]
-    if (next.join() !== drag.preview.join()) setDrag({ ...drag, preview: next })
+    const d = dragRef.current
+    if (!d || d.settling) return
+    const { geo } = d
+    const dx = e.clientX - geo.x
+    const dy = e.clientY - geo.y
+    const r = box.current?.getBoundingClientRect()
+    const outside = !!r && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)
+    const held = geo.rows[d.start]
+    const target = outside ? d.start : dragTarget(d.start, (held.top + held.bottom) / 2 + dy, geo.rows)
+    setDrag({ ...d, dx, dy, target, outside })
   }
   const onDragEnd = () => {
-    const drag = dragRef.current
-    if (!drag) return
-    if (drag.preview.join() !== savedOpen.map((t) => t.id).join()) saveOrder(drag.preview)
-    setDrag(null)
+    const d = dragRef.current
+    if (!d || d.settling) return
+    // Glide into the new slot (or back to the old one), then apply the new order.
+    setDrag({ ...d, settling: true, dx: 0, dy: slotOffset(d.start, d.target, d.geo.rows) })
+    window.setTimeout(() => {
+      if (d.target !== d.start) saveOrder(moveItem(savedOpen.map((t) => t.id), d.start, d.target))
+      setDrag(null)
+    }, SETTLE_MS)
   }
-  // Follow the pointer on the whole window while dragging: the row moves in the page as you drag,
-  // which would end pointer capture on the handle itself.
-  const handlers = useRef({ move: onDragMove, end: onDragEnd })
-  useEffect(() => { handlers.current = { move: onDragMove, end: onDragEnd } })
+  const cancelDrag = () => {
+    const d = dragRef.current
+    if (d && !d.settling) { setDrag({ ...d, target: d.start }); onDragEnd() }
+  }
+  const startDrag = (e: React.PointerEvent, id: string, index: number) => {
+    if (e.button !== 0 || dragRef.current) return
+    e.preventDefault()
+    const geo = {
+      rows: savedOpen.map((t) => { const r = rows.current.get(t.id)!.getBoundingClientRect(); return { top: r.top, bottom: r.bottom } }),
+      x: e.clientX,
+      y: e.clientY,
+    }
+    setDrag({ id, start: index, dx: 0, dy: 0, target: index, outside: false, settling: false, geo })
+  }
+  // Follow the pointer on the whole window while dragging, so it keeps working outside the handle.
+  const handlers = useRef({ move: onDragMove, end: onDragEnd, cancel: cancelDrag })
+  useEffect(() => { handlers.current = { move: onDragMove, end: onDragEnd, cancel: cancelDrag } })
   const dragging = drag !== null
   useEffect(() => {
     if (!dragging) return
     const move = (e: PointerEvent) => handlers.current.move(e)
     const end = () => handlers.current.end()
-    const cancel = () => setDrag(null)
+    const cancel = () => handlers.current.cancel()
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') cancel() }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', end)
     window.addEventListener('pointercancel', cancel)
+    window.addEventListener('keydown', key)
     return () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', end)
       window.removeEventListener('pointercancel', cancel)
+      window.removeEventListener('keydown', key)
     }
   }, [dragging])
+  const rowStyle = (i: number, t: { id: string; done: boolean }): React.CSSProperties | undefined => {
+    if (!drag || t.done) return undefined
+    if (t.id === drag.id) return { transform: `translate(${drag.dx}px, ${drag.dy}px)` }
+    const shift = rowShift(i, drag.start, drag.target, drag.geo.rows)
+    return shift ? { transform: `translateY(${shift}px)` } : undefined
+  }
   const onHandleKey = (e: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
     const to = e.key === 'ArrowUp' ? index - 1 : e.key === 'ArrowDown' ? index + 1 : null
     if (to === null || to < 0 || to >= savedOpen.length) return
@@ -285,7 +321,7 @@ function Todos({ data, save }: { data: LocalData; save: (d: LocalData) => void }
     requestAnimationFrame(() => handle.focus())
   }
   return (
-    <section className="panel">
+    <section className="panel" ref={box}>
       <h2>Eigen to-do's</h2>
       <form className="inline-form" onSubmit={(e) => {
         e.preventDefault()
@@ -297,12 +333,13 @@ function Todos({ data, save }: { data: LocalData; save: (d: LocalData) => void }
         <button className="btn btn-primary" type="submit">Toevoegen</button>
       </form>
       {open.length === 0 && <p className="muted small">Geen open to-do's.</p>}
-      <ul className="todo-list">
+      <ul className={`todo-list ${drag ? 'is-dragging' : ''}`}>
         {[...open, ...(showDone ? done : [])].map((t, i) => (
           <li
             key={t.id}
             ref={(el) => { if (el) rows.current.set(t.id, el); else rows.current.delete(t.id) }}
-            className={`${t.done ? 'done' : ''} ${drag?.id === t.id ? 'dragging' : ''}`}
+            className={`${t.done ? 'done' : ''} ${drag?.id === t.id ? `dragging ${drag.settling ? 'settling' : ''} ${drag.outside ? 'outside' : ''}` : ''}`}
+            style={rowStyle(i, t)}
           >
             {!t.done && open.length > 1 && (
               <button
@@ -310,11 +347,7 @@ function Todos({ data, save }: { data: LocalData; save: (d: LocalData) => void }
                 className="drag-handle"
                 aria-label={`Verplaats ${t.title} (pijltjestoetsen omhoog/omlaag)`}
                 title="Sleep om de volgorde te veranderen"
-                onPointerDown={(e) => {
-                  if (e.button !== 0) return
-                  e.preventDefault()
-                  setDrag({ id: t.id, preview: savedOpen.map((x) => x.id) })
-                }}
+                onPointerDown={(e) => startDrag(e, t.id, i)}
                 onKeyDown={(e) => onHandleKey(e, i)}
               >⋮⋮</button>
             )}
