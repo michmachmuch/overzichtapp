@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Wat nu?
+- Reorder your own to-do's by dragging the ⋮⋮ handle (mouse or finger): the row sticks to the pointer, the others slide aside, and it settles where you let go; let go outside the box (or press Esc) and it flies back. With the handle focused, the arrow keys move it too. The order is saved
+
 ## v1.1.0 (2026-11-26)
 
 ### Telefoon
